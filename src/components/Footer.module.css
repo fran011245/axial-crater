@@ -1,0 +1,53 @@
+.footer {
+    background-color: #06090f;
+    /* Even darker than bg */
+    padding: 60px 0;
+    margin-top: auto;
+    position: relative;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.columns {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 40px;
+}
+
+.column h4 {
+    color: var(--primary);
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.column a {
+    display: block;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    font-size: 13px;
+    transition: color 0.2s;
+}
+
+.column a:hover {
+    color: var(--text-primary);
+}
+
+.chatBtn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #1aa38e;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 500;
+}

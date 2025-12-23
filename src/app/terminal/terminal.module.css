@@ -1,0 +1,518 @@
+.terminalBody {
+    background-color: #000000;
+    color: #ff9900;
+    font-family: 'Courier New', Courier, monospace;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    padding: 8px;
+    box-sizing: border-box;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: #888;
+}
+
+/* Global Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #110a00;
+    border-left: 1px solid #331a00;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ff9900;
+    border: 1px solid #000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #cc7a00;
+}
+
+/* Layout Grid */
+.gridContainer {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: 36px 1fr 220px 100px;
+    /* Header | Overview | Wallet | Ticker */
+    gap: 8px;
+    height: 100%;
+    border: 1px solid #331a00;
+}
+
+/* Header */
+.header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ff9900;
+    color: #000;
+    padding: 0 8px;
+    font-weight: 700;
+    border-bottom: 2px solid #000;
+}
+
+.brand {
+    letter-spacing: 2px;
+}
+
+.marquee {
+    flex-grow: 1;
+    text-align: center;
+    border-left: 2px solid #000;
+    border-right: 2px solid #000;
+}
+
+.clock {
+    font-weight: 700;
+}
+
+/* Global Box Styles */
+.sectorA,
+.sectorB,
+.sectorW,
+.sectorC {
+    border: 1px solid #331a00;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Sector A: Overview */
+.sectorA {
+    grid-row: 2 / 3;
+    grid-column: 1 / 2;
+    padding: 0;
+}
+
+.panelTitle {
+    background: #331a00;
+    color: #ff9900;
+    padding: 4px 8px;
+    font-weight: bold;
+    border-bottom: 2px solid #ff9900;
+    /* Sturdier border */
+    font-size: 12px;
+}
+
+.bigStat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 10px;
+    border-bottom: 1px solid #331a00;
+}
+
+.label {
+    color: #cccccc;
+    /* Improved Contrast (Light Grey) */
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.value,
+.valueOk,
+.valueErr {
+    text-align: right;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.valueOk {
+    color: #00ff00;
+}
+
+.valueErr {
+    color: #ff3333;
+    animation: blink 1s infinite;
+}
+
+/* Brighter Red */
+
+/* Warning / Illiquid Box */
+.warningSection {
+    border-top: 2px solid #ff0000;
+    border-bottom: 2px solid #ff0000;
+    background: #000;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.warningHeader {
+    background: #ff0000;
+    color: #000;
+    padding: 4px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    height: 28px;
+}
+
+.warningTitle {
+    color: #000;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.warningList {
+    max-height: 140px;
+    overflow-y: auto;
+    scrollbar-color: #ff0000 #1a0000;
+}
+
+.warningList::-webkit-scrollbar-thumb {
+    background-color: #ff0000;
+}
+
+.warningList::-webkit-scrollbar-track {
+    background: #1a0000;
+}
+
+.warningRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    border-bottom: 1px solid #331a00;
+    font-size: 12px;
+    align-items: center;
+}
+
+.warningRow:hover {
+    background: #1a0000;
+}
+
+.warnSymbol {
+    color: #ff3333;
+    font-weight: bold;
+}
+
+/* Brighter Red */
+.warnVol {
+    color: #ffaa00;
+}
+
+/* Brighter Amber */
+
+/* Sector B: Top Markets */
+.sectorB {
+    grid-row: 2 / 4;
+    grid-column: 2 / 3;
+}
+
+.tableHeader {
+    display: grid;
+    grid-template-columns: 80px 80px 60px 100px 100px 100px 1fr 1fr;
+    padding: 6px 8px;
+    background: #331a00;
+    color: #ff9900;
+    font-weight: bold;
+    font-size: 12px;
+    border-bottom: 1px solid #ff9900;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.tableHeader span {
+    text-align: right;
+}
+
+.tableHeader span:first-child {
+    text-align: left;
+}
+
+.scrollList {
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.tableRow {
+    display: grid;
+    grid-template-columns: 80px 80px 60px 100px 100px 100px 1fr 1fr;
+    padding: 4px 8px;
+    border-bottom: 1px solid #1a0f00;
+    align-items: center;
+    cursor: crosshair;
+    font-size: 13px;
+}
+
+.tableRow:hover {
+    background: #1a1a00;
+    color: #fff;
+}
+
+.colSymbol {
+    color: #ff9900;
+    font-weight: bold;
+    text-align: left;
+}
+
+.colPrice {
+    text-align: right;
+    color: #fff;
+}
+
+/* White Price for legibility */
+.colVol {
+    text-align: right;
+    color: #ccc;
+}
+
+.tableRow span {
+    text-align: right;
+}
+
+.tableRow span:first-child {
+    text-align: left;
+}
+
+.gain {
+    color: #00ff00;
+    text-align: right;
+}
+
+.loss {
+    color: #ff3333;
+    text-align: right;
+}
+
+.statusOk {
+    color: #00ff00;
+    text-align: center !important;
+}
+
+.statusErr {
+    color: #ff3333;
+    text-align: center !important;
+}
+
+/* Sector W: Wallet */
+.sectorW {
+    grid-row: 3 / 4;
+    grid-column: 1 / 2;
+    border-top: 1px solid #331a00;
+}
+
+.walletGrid {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.walletHeaderRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: #110a00;
+    color: #ffaa00;
+    border-bottom: 1px solid #331a00;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.walletList {}
+
+.walletRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 8px;
+    border-bottom: 1px solid #110a00;
+    font-size: 11px;
+}
+
+.walletSymbol {
+    color: #ff9900;
+    font-weight: bold;
+}
+
+.walletVol {
+    color: #ffaa00;
+}
+
+.walletStatus {
+    display: flex;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+/* Sector C: Movements */
+.sectorC {
+    grid-row: 4 / 5;
+    grid-column: 1 / -1;
+    border-top: 2px solid #ff9900;
+    background: #000;
+    padding: 0;
+}
+
+.sectorHeader {
+    background: #ff9900;
+    color: #000;
+    padding: 2px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 24px;
+    font-weight: bold;
+}
+
+.headerTitle {
+    color: #000;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.denseGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    overflow-y: auto;
+}
+
+.miniTag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid #331a00;
+    background: #050500;
+    color: #ffaa00;
+    /* Brighter */
+}
+
+.miniTag[data-status='err'] {
+    background: #330000;
+    color: #ff3333;
+    border-color: #ff0000;
+}
+
+/* Helpers */
+.searchContainer {
+    display: flex;
+    width: 100%;
+    align-items: center;
+}
+
+.searchInput,
+.searchInputOrange {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #000;
+    /* Input text black on Red/Orange header */
+    font-family: inherit;
+    font-weight: bold;
+    width: 100%;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.searchInput::placeholder {
+    color: #330000;
+}
+
+.iconBtn {
+    cursor: pointer;
+    color: #000;
+}
+
+@keyframes blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes pulseBorder {
+    0% {
+        border-color: #ff0000;
+    }
+
+    50% {
+        border-color: #800000;
+    }
+
+    100% {
+        border-color: #ff0000;
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .terminalBody {
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .gridContainer {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+}
+/* React Grid Layout - Resize Handles */
+:global(.react-resizable-handle) {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    box-sizing: border-box;
+    background-image: none;
+}
+
+:global(.react-resizable-handle-se) {
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+}
+
+:global(.react-resizable-handle-se::after) {
+    content: '';
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid #ff9900;
+    border-bottom: 2px solid #ff9900;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+:global(.react-resizable-handle-se:hover::after) {
+    opacity: 1;
+    border-color: #ffaa00;
+}
+
+:global(.react-grid-item) {
+    transition: all 200ms ease;
+    transition-property: left, top, width, height;
+}
+
+:global(.react-grid-item.react-grid-placeholder) {
+    background: rgba(255, 153, 0, 0.15);
+    border: 2px dashed #ff9900;
+    opacity: 0.5;
+    transition-duration: 100ms;
+    z-index: 2;
+    border-radius: 0;
+}
+
+:global(.react-grid-item > .react-resizable-handle::after) {
+    border-color: #ff9900;
+}
+
+:global(.react-grid-item:hover > .react-resizable-handle::after) {
+    opacity: 1;
+}
