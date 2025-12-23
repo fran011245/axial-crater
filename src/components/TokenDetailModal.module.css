@@ -1,0 +1,164 @@
+/* Backdrop */
+.backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9998;
+    animation: fadeIn 0.2s ease;
+}
+
+/* Modal Container */
+.modal {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 240px;
+    background: #000000;
+    border: 1px solid #ff9900;
+    box-shadow: 0 2px 10px rgba(255, 153, 0, 0.3);
+    z-index: 9999;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10px;
+    color: #cccccc;
+    text-transform: uppercase;
+    animation: slideIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Header */
+.header {
+    background: #331a00;
+    border-bottom: 1px solid #ff9900;
+    padding: 4px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tokenName {
+    color: #ff9900;
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+.closeButton {
+    background: transparent;
+    border: none;
+    color: #ff9900;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.closeButton:hover {
+    color: #ffaa00;
+}
+
+.closeButton:active {
+    color: #cc7a00;
+}
+
+/* Content */
+.content {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.compactRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+}
+
+.label {
+    color: #888888;
+    font-weight: bold;
+    font-size: 9px;
+}
+
+.value {
+    color: #ffaa00;
+    font-weight: bold;
+    font-size: 9px;
+    text-align: right;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.statusContainer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.statusText {
+    font-size: 9px;
+    font-weight: bold;
+    color: #cccccc;
+}
+
+.statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dotGreen {
+    background: #00ff00;
+    box-shadow: 0 0 4px #00ff00;
+}
+
+.dotRed {
+    background: #ff3333;
+    box-shadow: 0 0 4px #ff3333;
+}
+
+@keyframes blink {
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .modal {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+    }
+}
+

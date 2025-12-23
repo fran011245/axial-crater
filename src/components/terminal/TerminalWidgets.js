@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Search, X } from 'lucide-react';
 import styles from '../../app/terminal/terminal.module.css';
 
-export const NetworkVitals = ({ status, volume }) => {
+export const NetworkVitals = ({ status, volume, isClassicTheme = false }) => {
     return (
         <section className={styles.sectorA} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
             <div className={styles.panelTitle}>{">> NETWORK_VITALS"}</div>
@@ -29,7 +29,7 @@ export const NetworkVitals = ({ status, volume }) => {
 };
 
 
-export const LiquidityRiskMonitor = ({ volume }) => {
+export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
     const [illiquidSearch, setIlliquidSearch] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -78,17 +78,17 @@ export const LiquidityRiskMonitor = ({ volume }) => {
                             </div>
                         ))
                 ) : (
-                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: '#888' }}>LOADING...</div>
+                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>LOADING...</div>
                 )}
                 {volume?.lowPairs && volume.lowPairs.filter(p => !illiquidSearch || p.symbol.includes(illiquidSearch.toUpperCase())).length === 0 && (
-                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: '#ff5555' }}>NO RISK DATA</div>
+                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#ff5555' : '#f85149' }}>NO RISK DATA</div>
                 )}
             </div>
         </div>
     );
 };
 
-export const MarketScanner = ({ volume, movements }) => {
+export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -179,7 +179,7 @@ export const MarketScanner = ({ volume, movements }) => {
                         );
                     })
                 ) : (
-                    <div className={styles.tableRow} style={{ justifyContent: 'center', color: '#888' }}>
+                    <div className={styles.tableRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>
                         {searchQuery ? 'NO MATCHES' : 'LOADING...'}
                     </div>
                 )}
@@ -188,7 +188,7 @@ export const MarketScanner = ({ volume, movements }) => {
     );
 };
 
-export const WalletMonitor = ({ walletData }) => {
+export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
     return (
         <section className={styles.sectorW} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className={styles.warningHeader}>
@@ -203,18 +203,33 @@ export const WalletMonitor = ({ walletData }) => {
             <div className={styles.walletGrid}>
                 <div className={styles.walletHeaderRow}>
                     <span>TOKEN_SYM</span>
+                    <span>IN_VOL_24H</span>
                     <span>OUT_VOL_24H</span>
                 </div>
                 <div className={styles.walletList}>
                     {walletData?.topTokens && walletData.topTokens.length > 0 ? (
-                        walletData.topTokens.map(t => (
-                            <div key={t.symbol} className={styles.walletRow}>
-                                <span className={styles.walletSymbol}>{t.symbol}</span>
-                                <span className={styles.walletVol}>{Math.floor(t.volume).toLocaleString()}</span>
-                            </div>
-                        ))
+                        walletData.topTokens.map(t => {
+                            // Format volumes: show USD if available, otherwise raw token amount
+                            const formatVolume = (volume, usdVolume) => {
+                                if (usdVolume !== null && usdVolume !== undefined) {
+                                    return `$${Math.floor(usdVolume).toLocaleString()}`;
+                                }
+                                return volume > 0 ? Math.floor(volume).toLocaleString() : '0';
+                            };
+
+                            const inDisplay = formatVolume(t.inVolume || 0, t.inVolumeUSD);
+                            const outDisplay = formatVolume(t.outVolume || 0, t.outVolumeUSD);
+
+                            return (
+                                <div key={t.symbol} className={styles.walletRow}>
+                                    <span className={styles.walletSymbol}>{t.symbol}</span>
+                                    <span className={styles.walletVol}>{inDisplay}</span>
+                                    <span className={styles.walletVol}>{outDisplay}</span>
+                                </div>
+                            );
+                        })
                     ) : (
-                        <div className={styles.walletRow} style={{ justifyContent: 'center', color: '#666' }}>SCANNING / NO DATA</div>
+                        <div className={styles.walletRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#666' : '#6e7681' }}>SCANNING / NO DATA</div>
                     )}
                 </div>
             </div>
@@ -222,9 +237,15 @@ export const WalletMonitor = ({ walletData }) => {
     );
 };
 
-export const StatusFeed = ({ movements }) => {
+export const StatusFeed = ({ movements, onTokenClick, isClassicTheme = false }) => {
     const [movementSearch, setMovementSearch] = useState("");
     const [isMovementSearchOpen, setIsMovementSearchOpen] = useState(false);
+
+    const handleTokenClick = (token) => {
+        if (onTokenClick) {
+            onTokenClick(token);
+        }
+    };
 
     return (
         <section className={styles.sectorC} style={{ height: '100%', width: '100%' }}>
@@ -266,7 +287,13 @@ export const StatusFeed = ({ movements }) => {
                     .map((m, i) => {
                         const isOk = m.deposit === 'Active' && m.withdrawal === 'Active';
                         return (
-                            <div key={i} className={styles.miniTag} data-status={isOk ? 'ok' : 'err'}>
+                            <div 
+                                key={i} 
+                                className={styles.miniTag} 
+                                data-status={isOk ? 'ok' : 'err'}
+                                onClick={() => handleTokenClick(m)}
+                                style={{ cursor: 'pointer' }}
+                            >
                                 {m.symbol || m.name}: {isOk ? 'OK' : 'WARN'}
                             </div>
                         )

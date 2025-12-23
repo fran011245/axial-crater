@@ -3,12 +3,25 @@
 import { useEffect, useState } from 'react';
 import styles from './MovementsTable.module.css';
 import { Search, AlertCircle, CheckCircle } from 'lucide-react';
+import TokenDetailModal from './TokenDetailModal';
 
 export default function MovementsTable() {
     const [movements, setMovements] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [showSuspendedOnly, setShowSuspendedOnly] = useState(false);
+    const [selectedToken, setSelectedToken] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const handleTokenClick = (token) => {
+        setSelectedToken(token);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedToken(null);
+    };
 
     useEffect(() => {
         fetch('/api/movements')
@@ -69,7 +82,11 @@ export default function MovementsTable() {
                                 <tr><td colSpan="2" className={styles.loadingCell}>No currencies found</td></tr>
                             ) : (
                                 filteredMovements.map((m, idx) => (
-                                    <tr key={idx}>
+                                    <tr 
+                                        key={idx}
+                                        onClick={() => handleTokenClick(m)}
+                                        style={{ cursor: 'pointer' }}
+                                    >
                                         <td className={styles.nameCell}>
                                             <div className={styles.currencyName}>{m.name}</div>
                                             <div className={styles.currencySymbol}>{m.symbol}</div>
@@ -93,6 +110,11 @@ export default function MovementsTable() {
                     </table>
                 </div>
             </div>
+            <TokenDetailModal 
+                isOpen={isModalOpen} 
+                onClose={handleCloseModal} 
+                token={selectedToken} 
+            />
         </section>
     );
 }

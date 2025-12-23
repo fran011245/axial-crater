@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getNetworkName } from '../../../utils/networkMapper';
 
 export async function GET() {
     try {
@@ -17,19 +18,25 @@ export async function GET() {
             methodMap.set(item[0], item[1][0]);
         });
 
-        // statusData: [ ["BITCOIN", 1, 1, ...], ... ]
+        // statusData: [ ["BITCOIN", 1, 1, null, null, null, null, 0, 0, null, null, confirmation_count], ... ]
         // Index 1: Deposit (1=Active, 0=Maintenance)
         // Index 2: Withdrawal (1=Active, 0=Maintenance)
+        // Index 11: Confirmation count (NOT network ID)
 
         const movements = statusData[0].map(item => {
             const fullName = item[0];
             const depositStatus = item[1];
             const withdrawalStatus = item[2];
+            const confirmationCount = item[11]; // Confirmation count at index 11
             const symbol = methodMap.get(fullName) || fullName;
+            // Infer network from token name since index 11 is confirmation count, not network ID
+            const network = getNetworkName(null, fullName);
 
             return {
                 name: fullName,
                 symbol: symbol,
+                network: network,
+                confirmationCount: confirmationCount,
                 depositValues: item, // debugging
                 deposit: depositStatus === 1 ? 'Active' : 'Maintenance',
                 withdrawal: withdrawalStatus === 1 ? 'Active' : 'Maintenance',
