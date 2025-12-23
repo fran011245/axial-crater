@@ -30,7 +30,7 @@ export default function TokenDetailWidget({ token, onClose, isClassicTheme = fal
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div className={`${styles.statusDot} ${isDepositActive ? styles.dotGreen : styles.dotRed}`} style={{ width: '6px', height: '6px' }} />
                         <span className={isDepositActive ? styles.statusOk : styles.statusErr}>
-                            {isDepositActive ? 'OK' : 'MAINT'}
+                            {isDepositActive ? 'OK' : 'CLSD'}
                         </span>
                     </div>
                 </div>
@@ -39,7 +39,7 @@ export default function TokenDetailWidget({ token, onClose, isClassicTheme = fal
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div className={`${styles.statusDot} ${isWithdrawalActive ? styles.dotGreen : styles.dotRed}`} style={{ width: '6px', height: '6px' }} />
                         <span className={isWithdrawalActive ? styles.statusOk : styles.statusErr}>
-                            {isWithdrawalActive ? 'OK' : 'MAINT'}
+                            {isWithdrawalActive ? 'OK' : 'CLSD'}
                         </span>
                     </div>
                 </div>

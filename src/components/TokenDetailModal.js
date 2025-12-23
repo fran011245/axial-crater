@@ -55,14 +55,14 @@ export default function TokenDetailModal({ isOpen, onClose, token }) {
                         <span className={styles.label}>D:</span>
                         <div className={styles.statusContainer}>
                             <div className={`${styles.statusDot} ${isDepositActive ? styles.dotGreen : styles.dotRed}`} />
-                            <span className={styles.statusText}>{isDepositActive ? 'OK' : 'MAINT'}</span>
+                            <span className={styles.statusText}>{isDepositActive ? 'OK' : 'CLSD'}</span>
                         </div>
                     </div>
                     <div className={styles.compactRow}>
                         <span className={styles.label}>W:</span>
                         <div className={styles.statusContainer}>
                             <div className={`${styles.statusDot} ${isWithdrawalActive ? styles.dotGreen : styles.dotRed}`} />
-                            <span className={styles.statusText}>{isWithdrawalActive ? 'OK' : 'MAINT'}</span>
+                            <span className={styles.statusText}>{isWithdrawalActive ? 'OK' : 'CLSD'}</span>
                         </div>
                     </div>
                 </div>

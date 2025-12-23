@@ -4,6 +4,31 @@ import { useState, useMemo } from 'react';
 import { Search, X, Pin } from 'lucide-react';
 import styles from '../../app/terminal/terminal.module.css';
 
+// Helper function to get Bitfinex trading URL
+const getBitfinexTradingUrl = (symbol, pairUrlMap) => {
+    // Si tenemos el mapa de la API, usarlo directamente
+    if (pairUrlMap && pairUrlMap[symbol]) {
+        return `https://trading.bitfinex.com/t/${pairUrlMap[symbol]}?type=exchange`;
+    }
+    
+    // Si el símbolo ya tiene dos puntos, usarlo directamente (evitar doble procesamiento)
+    if (symbol.includes(':')) {
+        return `https://trading.bitfinex.com/t/${symbol}?type=exchange`;
+    }
+    
+    // Fallback: construir manualmente si no tenemos el mapa
+    if (symbol.endsWith('USD')) {
+        const base = symbol.slice(0, -3);
+        return `https://trading.bitfinex.com/t/${base}:USD?type=exchange`;
+    } else if (symbol.endsWith('UST')) {
+        const base = symbol.slice(0, -3);
+        return `https://trading.bitfinex.com/t/${base}:UST?type=exchange`;
+    }
+    
+    // Último fallback
+    return `https://trading.bitfinex.com/t/${symbol}?type=exchange`;
+};
+
 export const NetworkVitals = ({ status, volume, isClassicTheme = false }) => {
     return (
         <section className={styles.sectorA} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly' }}>
@@ -32,26 +57,78 @@ export const NetworkVitals = ({ status, volume, isClassicTheme = false }) => {
 export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
     const [illiquidSearch, setIlliquidSearch] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
-    const [sortOrder, setSortOrder] = useState(null); // 'desc' | 'asc' | null
+    const [sortByTicker, setSortByTicker] = useState(null);
+    const [sortBySpread, setSortBySpread] = useState(null);
+    const [sortBy24HVol, setSortBy24HVol] = useState(null);
+    const [sortBy7DVol, setSortBy7DVol] = useState(null);
 
-    const handleSort = () => {
-        if (sortOrder === null) {
-            setSortOrder('desc');
-        } else if (sortOrder === 'desc') {
-            setSortOrder('asc');
-        } else {
-            setSortOrder(null);
+    const fmtVol = (val) => {
+        if (!val || val === 0) return '---';
+        if (val >= 1000000000) return (val / 1000000000).toFixed(1) + 'B';
+        if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+        if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
+        return Math.floor(val).toLocaleString();
+    };
+
+    const handleSort = (column) => {
+        // Reset all other sorts
+        setSortByTicker(null);
+        setSortBySpread(null);
+        setSortBy24HVol(null);
+        setSortBy7DVol(null);
+
+        // Handle the clicked column
+        if (column === 'ticker') {
+            if (sortByTicker === null) setSortByTicker('desc');
+            else if (sortByTicker === 'desc') setSortByTicker('asc');
+            else setSortByTicker(null);
+        } else if (column === 'spread') {
+            if (sortBySpread === null) setSortBySpread('desc');
+            else if (sortBySpread === 'desc') setSortBySpread('asc');
+            else setSortBySpread(null);
+        } else if (column === '24hvol') {
+            if (sortBy24HVol === null) setSortBy24HVol('desc');
+            else if (sortBy24HVol === 'desc') setSortBy24HVol('asc');
+            else setSortBy24HVol(null);
+        } else if (column === '7dvol') {
+            if (sortBy7DVol === null) setSortBy7DVol('desc');
+            else if (sortBy7DVol === 'desc') setSortBy7DVol('asc');
+            else setSortBy7DVol(null);
         }
     };
 
     const sortedPairs = useMemo(() => {
         if (!volume?.lowPairs) return [];
         const filtered = volume.lowPairs.filter(p => !illiquidSearch || p.symbol.includes(illiquidSearch.toUpperCase()));
-        if (!sortOrder) return filtered;
+        
+        if (!sortByTicker && !sortBySpread && !sortBy24HVol && !sortBy7DVol) {
+            return filtered; // Default: no sort
+        }
+        
         return [...filtered].sort((a, b) => {
-            return sortOrder === 'desc' ? b.volumeUSD - a.volumeUSD : a.volumeUSD - b.volumeUSD;
+            if (sortByTicker) {
+                return sortByTicker === 'desc' 
+                    ? b.symbol.localeCompare(a.symbol)
+                    : a.symbol.localeCompare(b.symbol);
+            }
+            if (sortBySpread) {
+                const spreadA = a.spreadPercent || 0;
+                const spreadB = b.spreadPercent || 0;
+                return sortBySpread === 'desc' ? spreadB - spreadA : spreadA - spreadB;
+            }
+            if (sortBy24HVol) {
+                return sortBy24HVol === 'desc' 
+                    ? (b.volumeUSD || 0) - (a.volumeUSD || 0)
+                    : (a.volumeUSD || 0) - (b.volumeUSD || 0);
+            }
+            if (sortBy7DVol) {
+                return sortBy7DVol === 'desc' 
+                    ? (b.vol7d || 0) - (a.vol7d || 0)
+                    : (a.vol7d || 0) - (b.vol7d || 0);
+            }
+            return 0;
         });
-    }, [volume?.lowPairs, illiquidSearch, sortOrder]);
+    }, [volume?.lowPairs, illiquidSearch, sortByTicker, sortBySpread, sortBy24HVol, sortBy7DVol]);
 
     return (
         <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -78,18 +155,7 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
                     </div>
                 ) : (
                     <>
-                        <span 
-                            className={styles.warningTitle}
-                            onClick={handleSort}
-                            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                        >
-                            {">> LIQUIDITY_RISK_MONITOR"}
-                            {sortOrder && (
-                                <span className={styles.sortArrow}>
-                                    {sortOrder === 'desc' ? '↓' : '↑'}
-                                </span>
-                            )}
-                        </span>
+                        <span className={styles.warningTitle}>{">> LIQUIDITY_RISK_MONITOR"}</span>
                         <Search
                             size={14}
                             className={styles.iconBtn}
@@ -98,20 +164,58 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
                     </>
                 )}
             </div>
-            <div className={styles.warningList} style={{ flex: 1, overflow: 'auto' }}>
-                {sortedPairs.length > 0 ? (
-                    sortedPairs.map(p => (
-                        <div key={p.symbol} className={styles.warningRow}>
-                            <span className={styles.warnSymbol}>{p.symbol}</span>
-                            <span className={styles.warnVol}>${Math.floor(p.volumeUSD).toLocaleString()}</span>
-                        </div>
-                    ))
-                ) : (
-                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>LOADING...</div>
-                )}
-                {volume?.lowPairs && sortedPairs.length === 0 && (
-                    <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#ff5555' : '#f85149' }}>NO RISK DATA</div>
-                )}
+            <div className={styles.warningGrid}>
+                <div className={styles.warningHeaderRow}>
+                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('ticker')}>
+                        TICKER
+                        {sortByTicker && <span className={styles.sortArrow}>{sortByTicker === 'desc' ? '↓' : '↑'}</span>}
+                    </span>
+                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('spread')}>
+                        SPREAD
+                        {sortBySpread && <span className={styles.sortArrow}>{sortBySpread === 'desc' ? '↓' : '↑'}</span>}
+                    </span>
+                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('24hvol')}>
+                        24H_VOL
+                        {sortBy24HVol && <span className={styles.sortArrow}>{sortBy24HVol === 'desc' ? '↓' : '↑'}</span>}
+                    </span>
+                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('7dvol')}>
+                        7D_VOL
+                        {sortBy7DVol && <span className={styles.sortArrow}>{sortBy7DVol === 'desc' ? '↓' : '↑'}</span>}
+                    </span>
+                </div>
+                <div className={styles.warningList} style={{ flex: 1, overflow: 'auto' }}>
+                    {sortedPairs.length > 0 ? (
+                        sortedPairs.map(p => (
+                            <div key={p.symbol} className={styles.warningRow}>
+                                <span 
+                                    className={styles.warnSymbol}
+                                    onClick={() => window.open(
+                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap), 
+                                        '_blank', 
+                                        'noopener,noreferrer'
+                                    )}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    {p.symbol}
+                                </span>
+                                <span className={styles.warnVol}>
+                                    {p.spreadPercent !== undefined ? `${p.spreadPercent.toFixed(1)}%` : '---'}
+                                </span>
+                                <span className={styles.warnVol}>
+                                    {p.volumeUSD ? `$${fmtVol(p.volumeUSD)}` : '---'}
+                                </span>
+                                <span className={styles.warnVol}>
+                                    {fmtVol(p.vol7d)}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>LOADING...</div>
+                    )}
+                    {volume?.lowPairs && sortedPairs.length === 0 && (
+                        <div className={styles.warningRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#ff5555' : '#f85149' }}>NO RISK DATA</div>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -123,6 +227,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
     const [sortBySymbol, setSortBySymbol] = useState(null);
     const [sortByLast, setSortByLast] = useState(null);
     const [sortBySD, setSortBySD] = useState(null);
+    const [sortBySpread, setSortBySpread] = useState(null);
     const [sortBy24HVol, setSortBy24HVol] = useState(null);
     const [sortBy7DVol, setSortBy7DVol] = useState(null);
     const [sortBy30DVol, setSortBy30DVol] = useState(null);
@@ -133,8 +238,8 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         const base = pairSymbol.replace('USD', '').replace('UST', '');
         const mv = movements.find(m => m.symbol === base || m.name === base);
         return {
-            d: mv ? (mv.deposit === 'Active' ? 'OK' : 'ERR') : 'NA',
-            w: mv ? (mv.withdrawal === 'Active' ? 'OK' : 'ERR') : 'NA'
+            d: mv ? (mv.deposit === 'Active' ? 'OK' : 'CLSD') : 'NA',
+            w: mv ? (mv.withdrawal === 'Active' ? 'OK' : 'CLSD') : 'NA'
         };
     };
 
@@ -150,6 +255,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         setSortBySymbol(null);
         setSortByLast(null);
         setSortBySD(null);
+        setSortBySpread(null);
         setSortBy24HVol(null);
         setSortBy7DVol(null);
         setSortBy30DVol(null);
@@ -169,6 +275,10 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
             if (sortBySD === null) setSortBySD('desc');
             else if (sortBySD === 'desc') setSortBySD('asc');
             else setSortBySD(null);
+        } else if (column === 'spread') {
+            if (sortBySpread === null) setSortBySpread('desc');
+            else if (sortBySpread === 'desc') setSortBySpread('asc');
+            else setSortBySpread(null);
         } else if (column === '24hvol') {
             if (sortBy24HVol === null) setSortBy24HVol('desc');
             else if (sortBy24HVol === 'desc') setSortBy24HVol('asc');
@@ -203,7 +313,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         let sorted = [...filteredPairs];
         
         // Determine which column is active
-        const activeSort = sortBySymbol || sortByLast || sortBySD || sortBy24HVol || 
+        const activeSort = sortBySymbol || sortByLast || sortBySD || sortBySpread || sortBy24HVol || 
                           sortBy7DVol || sortBy30DVol || sortByD || sortByW;
         
         if (!activeSort) return sorted;
@@ -212,8 +322,8 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
             const stA = getMovementStatus(a.symbol);
             const stB = getMovementStatus(b.symbol);
             
-            // Status order: OK > ERR > NA
-            const statusOrder = { 'OK': 3, 'ERR': 2, 'NA': 1 };
+            // Status order: OK > CLSD > NA
+            const statusOrder = { 'OK': 3, 'CLSD': 2, 'NA': 1 };
             
             if (sortBySymbol) {
                 return sortBySymbol === 'desc' 
@@ -225,6 +335,11 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
             }
             if (sortBySD) {
                 return sortBySD === 'desc' ? b.change - a.change : a.change - b.change;
+            }
+            if (sortBySpread) {
+                const spreadA = a.spreadPercent || 0;
+                const spreadB = b.spreadPercent || 0;
+                return sortBySpread === 'desc' ? spreadB - spreadA : spreadA - spreadB;
             }
             if (sortBy24HVol) {
                 return sortBy24HVol === 'desc' 
@@ -256,7 +371,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         });
         
         return sorted;
-    }, [filteredPairs, sortBySymbol, sortByLast, sortBySD, sortBy24HVol, sortBy7DVol, sortBy30DVol, sortByD, sortByW, movements]);
+    }, [filteredPairs, sortBySymbol, sortByLast, sortBySD, sortBySpread, sortBy24HVol, sortBy7DVol, sortBy30DVol, sortByD, sortByW, movements]);
 
     return (
         <section className={styles.sectorB} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -305,6 +420,10 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                     SD
                     {sortBySD && <span className={styles.sortArrow}>{sortBySD === 'desc' ? '↓' : '↑'}</span>}
                 </span>
+                <span className={styles.tableHeaderSortable} onClick={() => handleSort('spread')}>
+                    SPREAD
+                    {sortBySpread && <span className={styles.sortArrow}>{sortBySpread === 'desc' ? '↓' : '↑'}</span>}
+                </span>
                 <span className={styles.tableHeaderSortable} onClick={() => handleSort('24hvol')}>
                     24H_VOL
                     {sortBy24HVol && <span className={styles.sortArrow}>{sortBy24HVol === 'desc' ? '↓' : '↑'}</span>}
@@ -332,22 +451,35 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                         const st = getMovementStatus(p.symbol);
                         return (
                             <div key={p.symbol} className={styles.tableRow}>
-                                <span className={styles.colSymbol}>{p.symbol}</span>
+                                <span 
+                                    className={styles.colSymbol}
+                                    onClick={() => window.open(
+                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap), 
+                                        '_blank', 
+                                        'noopener,noreferrer'
+                                    )}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    {p.symbol}
+                                </span>
                                 <span className={styles.colPrice}>{p.lastPrice.toFixed(2)}</span>
                                 <span className={p.change >= 0 ? styles.gain : styles.loss}>
                                     {p.change > 0 ? '+' : ''}{(p.change * 100).toFixed(2)}%
+                                </span>
+                                <span className={styles.colVol}>
+                                    {p.spreadPercent !== undefined ? `${p.spreadPercent.toFixed(2)}%` : '---'}
                                 </span>
                                 <span className={styles.colVol}>{fmtVals(p.volumeUSD)}</span>
                                 <span className={styles.colVol}>{fmtVals(p.vol7d)}</span>
                                 <span className={styles.colVol}>{fmtVals(p.vol30d)}</span>
                                 <span className={
                                     st.d === 'OK' ? styles.statusOk : 
-                                    st.d === 'ERR' ? styles.statusErr : 
+                                    st.d === 'CLSD' ? styles.statusErr : 
                                     styles.statusNa
                                 }>{st.d}</span>
                                 <span className={
                                     st.w === 'OK' ? styles.statusOk : 
-                                    st.w === 'ERR' ? styles.statusErr : 
+                                    st.w === 'CLSD' ? styles.statusErr : 
                                     styles.statusNa
                                 }>{st.w}</span>
                             </div>
@@ -547,16 +679,29 @@ export const StatusFeed = ({ movements, onTokenClick, isClassicTheme = false }) 
                 {movements
                     .filter(m => !movementSearch || (m.symbol && m.symbol.includes(movementSearch.toUpperCase())) || (m.name && m.name.toUpperCase().includes(movementSearch.toUpperCase())))
                     .map((m, i) => {
-                        const isOk = m.deposit === 'Active' && m.withdrawal === 'Active';
+                        const isDepositOk = m.deposit === 'Active';
+                        const isWithdrawalOk = m.withdrawal === 'Active';
+                        const bothOk = isDepositOk && isWithdrawalOk;
+                        
+                        // Colors based on theme
+                        const greenColor = isClassicTheme ? '#00ff00' : '#3fb950';
+                        const redColor = isClassicTheme ? '#ff3333' : '#f85149';
+                        
                         return (
                             <div 
                                 key={i} 
                                 className={styles.miniTag} 
-                                data-status={isOk ? 'ok' : 'err'}
+                                data-status={bothOk ? 'ok' : 'err'}
                                 onClick={() => handleTokenClick(m)}
                                 style={{ cursor: 'pointer' }}
                             >
-                                {m.symbol || m.name}: {isOk ? 'OK' : 'WARN'}
+                                {m.symbol || m.name}: {bothOk ? 'OK' : (
+                                    <>
+                                        <span style={{ color: isDepositOk ? greenColor : redColor }}>D</span>
+                                        {' '}
+                                        <span style={{ color: isWithdrawalOk ? greenColor : redColor }}>W</span>
+                                    </>
+                                )}
                             </div>
                         )
                     })}

@@ -19,8 +19,8 @@ export async function GET() {
         });
 
         // statusData: [ ["BITCOIN", 1, 1, null, null, null, null, 0, 0, null, null, confirmation_count], ... ]
-        // Index 1: Deposit (1=Active, 0=Maintenance)
-        // Index 2: Withdrawal (1=Active, 0=Maintenance)
+        // Index 1: Deposit (1=Active, 0=Closed)
+        // Index 2: Withdrawal (1=Active, 0=Closed)
         // Index 11: Confirmation count (NOT network ID)
 
         const movements = statusData[0].map(item => {
@@ -38,8 +38,8 @@ export async function GET() {
                 network: network,
                 confirmationCount: confirmationCount,
                 depositValues: item, // debugging
-                deposit: depositStatus === 1 ? 'Active' : 'Maintenance',
-                withdrawal: withdrawalStatus === 1 ? 'Active' : 'Maintenance',
+                deposit: depositStatus === 1 ? 'Active' : 'Closed',
+                withdrawal: withdrawalStatus === 1 ? 'Active' : 'Closed',
                 isSuspended: depositStatus === 0 || withdrawalStatus === 0
             };
         });
