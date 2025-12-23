@@ -260,8 +260,8 @@
 
 .tableHeader {
     display: grid;
-    grid-template-columns: 80px 80px 60px 100px 100px 100px 1fr 1fr;
-    padding: 8px 10px;
+    grid-template-columns: 90px 90px 70px 110px 110px 110px 50px 50px;
+    padding: 6px 10px;
     background: #161b22;
     color: #8b949e;
     font-weight: bold;
@@ -271,14 +271,33 @@
     top: 0;
     z-index: 10;
     letter-spacing: 0.3px;
+    align-items: center;
 }
 
 .tableHeader span {
     text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
 }
 
 .tableHeader span:first-child {
     text-align: left;
+    justify-content: flex-start;
+}
+
+.tableHeaderSortable {
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: inherit;
+}
+
+.tableHeaderSortable:hover {
+    opacity: 0.8;
 }
 
 .scrollList {
@@ -288,7 +307,7 @@
 
 .tableRow {
     display: grid;
-    grid-template-columns: 80px 80px 60px 100px 100px 100px 1fr 1fr;
+    grid-template-columns: 90px 90px 70px 110px 110px 110px 50px 50px;
     padding: 6px 10px;
     border-bottom: 1px solid #30363d;
     align-items: center;
@@ -335,6 +354,18 @@
     text-align: left;
 }
 
+.tableRow span:nth-child(7),
+.tableRow span:nth-child(8) {
+    text-align: center;
+    justify-content: center;
+}
+
+.tableHeader span:nth-child(7),
+.tableHeader span:nth-child(8) {
+    text-align: center;
+    justify-content: center;
+}
+
 .gain {
     color: #3fb950;
     text-align: right;
@@ -352,6 +383,12 @@
 
 .statusErr {
     color: #f85149;
+    text-align: center !important;
+}
+
+.statusNa {
+    color: #8b949e;
+    opacity: 0.8;
     text-align: center !important;
 }
 
@@ -405,6 +442,43 @@
     text-align: right;
 }
 
+.walletHeaderSortable {
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.walletHeaderSortable:hover {
+    opacity: 0.8;
+}
+
+.sortArrow {
+    font-size: 10px;
+    color: #8b949e;
+    display: inline-block;
+    margin-left: 2px;
+}
+
+[data-theme="classic"] .sortArrow {
+    color: #888;
+}
+
+.terminalBody[data-theme="classic"] .walletHeaderSortable {
+    color: #ffaa00;
+}
+
+.terminalBody[data-theme="classic"] .walletHeaderSortable:hover {
+    color: #ff9900;
+    opacity: 1;
+}
+
+.terminalBody[data-theme="classic"] .sortArrow {
+    color: #888;
+}
+
 .walletList {}
 
 .walletRow {
@@ -435,6 +509,20 @@
 .walletSymbol {
     color: #58a6ff;
     font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pinIcon {
+    color: #58a6ff;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.terminalBody[data-theme="classic"] .pinIcon {
+    color: #ff9900;
+    opacity: 0.7;
 }
 
 .walletVol {
@@ -856,6 +944,15 @@
     border-bottom: 1px solid #ff9900;
 }
 
+.terminalBody[data-theme="classic"] .tableHeaderSortable {
+    color: #ff9900;
+}
+
+.terminalBody[data-theme="classic"] .tableHeaderSortable:hover {
+    color: #ffaa00;
+    opacity: 1;
+}
+
 .terminalBody[data-theme="classic"] .tableRow:nth-child(even) {
     background: #000;
 }
@@ -899,6 +996,11 @@
 
 .terminalBody[data-theme="classic"] .statusErr {
     color: #ff3333;
+}
+
+.terminalBody[data-theme="classic"] .statusNa {
+    color: #888;
+    opacity: 0.8;
 }
 
 .terminalBody[data-theme="classic"] .dotGreen {
