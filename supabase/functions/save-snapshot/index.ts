@@ -1,16 +1,33 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const VERCEL_URL = Deno.env.get('VERCEL_URL') || 'https://axial-crater.vercel.app';
+const SNAPSHOT_SECRET = Deno.env.get('SNAPSHOT_SECRET');
 
 Deno.serve(async (req: Request) => {
   try {
     console.log('[Cron] Starting snapshot save...');
     
-    // Call the snapshot API endpoint
+    if (!SNAPSHOT_SECRET) {
+      console.error('[Cron] SNAPSHOT_SECRET not configured');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'SNAPSHOT_SECRET not configured in Edge Function secrets',
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+    
+    // Call the snapshot API endpoint with secret header
     const response = await fetch(`${VERCEL_URL}/api/snapshot`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-snapshot-secret': SNAPSHOT_SECRET,
       },
     });
 

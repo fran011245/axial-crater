@@ -33,6 +33,11 @@ export async function GET(request) {
             { next: { revalidate: 300 } }
         );
         const tokenTxData = await tokenTxRes.json();
+        
+        // Validate Etherscan response
+        if (tokenTxData.status === '0' && tokenTxData.message !== 'No transactions found') {
+            console.warn('Etherscan token API error:', tokenTxData.message);
+        }
 
         // Fetch normal ETH transactions
         const ethTxRes = await fetch(
@@ -40,6 +45,11 @@ export async function GET(request) {
             { next: { revalidate: 300 } }
         );
         const ethTxData = await ethTxRes.json();
+        
+        // Validate Etherscan response
+        if (ethTxData.status === '0' && ethTxData.message !== 'No transactions found') {
+            console.warn('Etherscan ETH API error:', ethTxData.message);
+        }
 
         // Get pending transactions count
         const pendingRes = await fetch(
@@ -47,7 +57,9 @@ export async function GET(request) {
             { next: { revalidate: 60 } }
         );
         const pendingData = await pendingRes.json();
-        const pendingTxCount = pendingData.result?.filter(tx => !tx.blockNumber || tx.blockNumber === '0').length || 0;
+        const pendingTxCount = (Array.isArray(pendingData.result) 
+            ? pendingData.result.filter(tx => !tx.blockNumber || tx.blockNumber === '0').length 
+            : 0);
 
         // Process token transfers
         const tokensIn = {};
@@ -357,7 +369,10 @@ export async function GET(request) {
     } catch (error) {
         console.error("Etherscan API Error:", error);
         return NextResponse.json(
-            { error: "Failed to fetch wallet data" },
+            { 
+                error: "Failed to fetch wallet data",
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            },
             { status: 500 }
         );
     }
