@@ -194,24 +194,41 @@ export async function GET() {
             if (contractAddresses.length > 0) {
                 // CoinGecko API allows up to 100 contract addresses per request
                 const addressesToFetch = contractAddresses.slice(0, 100).join(',');
-                const priceRes = await fetch(
-                    `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addressesToFetch}&vs_currencies=usd`,
-                    {
-                        next: { revalidate: 300 } // Cache for 5 minutes
-                    }
-                );
-                
-                if (priceRes.ok) {
-                    const priceData = await priceRes.json();
-                    // Map contract addresses back to symbols
-                    Object.keys(priceData).forEach(contractAddr => {
-                        const symbol = Object.keys(tokenMap).find(s => 
-                            tokenMap[s]?.toLowerCase() === contractAddr.toLowerCase()
-                        );
-                        if (symbol && priceData[contractAddr]?.usd && !tokenPrices[symbol]) {
-                            tokenPrices[symbol] = priceData[contractAddr].usd;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    
+                    const priceRes = await fetch(
+                        `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addressesToFetch}&vs_currencies=usd`,
+                        {
+                            next: { revalidate: 300 }, // Cache for 5 minutes
+                            signal: controller.signal
                         }
-                    });
+                    );
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (priceRes.ok) {
+                        const priceData = await priceRes.json();
+                        // Map contract addresses back to symbols
+                        Object.keys(priceData).forEach(contractAddr => {
+                            const symbol = Object.keys(tokenMap).find(s => 
+                                tokenMap[s]?.toLowerCase() === contractAddr.toLowerCase()
+                            );
+                            if (symbol && priceData[contractAddr]?.usd && !tokenPrices[symbol]) {
+                                tokenPrices[symbol] = priceData[contractAddr].usd;
+                            }
+                        });
+                    } else {
+                        console.warn(`CoinGecko API returned status ${priceRes.status}`);
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.warn('CoinGecko API request timed out after 10 seconds');
+                    } else {
+                        console.warn('Error fetching token prices from CoinGecko:', error.message);
+                    }
+                    // Continue without prices - tokens will show raw amounts instead of USD
                 }
             }
             

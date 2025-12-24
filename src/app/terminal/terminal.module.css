@@ -4,7 +4,8 @@
     font-family: 'Courier New', Courier, monospace;
     height: 100vh;
     width: 100vw;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 8px;
     box-sizing: border-box;
     text-transform: uppercase;
@@ -594,6 +595,85 @@
     padding: 0;
 }
 
+/* Funding Stats - Same structure as LiquidityRiskMonitor */
+.fundingGridContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+.fundingHeaderRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 6px 10px;
+    background: #161b22;
+    color: #8b949e;
+    border-bottom: 1px solid #30363d;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+    gap: 8px;
+}
+
+.fundingList {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-color: #58a6ff #161b22;
+}
+
+.fundingList::-webkit-scrollbar-thumb {
+    background-color: #58a6ff;
+}
+
+.fundingList::-webkit-scrollbar-track {
+    background: #161b22;
+}
+
+.fundingRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 6px 10px;
+    border-bottom: 1px solid #30363d;
+    font-size: 12px;
+    align-items: center;
+    transition: background 0.2s ease;
+    gap: 8px;
+}
+
+.fundingRow:nth-child(even) {
+    background: #161b22;
+}
+
+.fundingRow:nth-child(odd) {
+    background: #0d1117;
+}
+
+.fundingRow:hover {
+    background: #21262d;
+    color: #e6edf3;
+}
+
+.fundingSymbol {
+    color: #58a6ff;
+    font-weight: bold;
+}
+
+.aprPositive {
+    color: #3fb950;
+    font-weight: bold;
+}
+
+.aprNegative {
+    color: #f85149;
+    font-weight: bold;
+}
+
+.fundingVol {
+    color: #f0883e;
+    text-align: right;
+}
+
 /* Sector D: Token Detail Widget */
 .sectorD {
     background: #161b22;
@@ -1115,6 +1195,50 @@
 
 .terminalBody[data-theme="classic"] .sectorD {
     background: #000;
+}
+
+/* Classic Theme - Funding Stats */
+.terminalBody[data-theme="classic"] .fundingHeaderRow {
+    background: #331a00;
+    color: #ff9900;
+    border-bottom: 1px solid #ff9900;
+}
+
+.terminalBody[data-theme="classic"] .fundingList::-webkit-scrollbar-thumb {
+    background-color: #ff0000;
+}
+
+.terminalBody[data-theme="classic"] .fundingList::-webkit-scrollbar-track {
+    background: #1a0000;
+}
+
+.terminalBody[data-theme="classic"] .fundingRow:nth-child(even) {
+    background: #000;
+}
+
+.terminalBody[data-theme="classic"] .fundingRow:nth-child(odd) {
+    background: #0a0000;
+}
+
+.terminalBody[data-theme="classic"] .fundingRow:hover {
+    background: #1a0000;
+    color: #fff;
+}
+
+.terminalBody[data-theme="classic"] .fundingSymbol {
+    color: #00ccff;
+}
+
+.terminalBody[data-theme="classic"] .aprPositive {
+    color: #00ff00;
+}
+
+.terminalBody[data-theme="classic"] .aprNegative {
+    color: #ff3333;
+}
+
+.terminalBody[data-theme="classic"] .fundingVol {
+    color: #ffaa00;
 }
 
 .terminalBody[data-theme="classic"] .sectorHeader {

@@ -709,3 +709,84 @@ export const StatusFeed = ({ movements, onTokenClick, isClassicTheme = false }) 
         </section>
     );
 };
+
+export const FundingStats = ({ funding, isClassicTheme = false }) => {
+    const [fundingSearch, setFundingSearch] = useState("");
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+    const fmtVol = (val) => {
+        if (!val || val === 0) return '---';
+        if (val >= 1000000000) return (val / 1000000000).toFixed(1) + 'B';
+        if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+        if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
+        return Math.floor(val).toLocaleString();
+    };
+
+    const filteredFunding = useMemo(() => {
+        if (!funding?.fundingStats) return [];
+        return funding.fundingStats.filter(f => 
+            !fundingSearch || f.symbol.includes(fundingSearch.toUpperCase())
+        );
+    }, [funding?.fundingStats, fundingSearch]);
+
+    return (
+        <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className={styles.warningHeader}>
+                {isSearchOpen ? (
+                    <div className={styles.searchContainer}>
+                        <input
+                            autoFocus
+                            type="text"
+                            className={styles.searchInput}
+                            value={fundingSearch}
+                            onChange={(e) => setFundingSearch(e.target.value)}
+                            onBlur={() => !fundingSearch && setIsSearchOpen(false)}
+                            placeholder="FILTER_FUNDING..."
+                        />
+                        <X
+                            size={14}
+                            className={styles.iconBtn}
+                            onClick={() => {
+                                setFundingSearch("");
+                                setIsSearchOpen(false);
+                            }}
+                        />
+                    </div>
+                ) : (
+                    <>
+                        <span className={styles.warningTitle}>{">> FUNDING_STATS"}</span>
+                        <Search
+                            size={14}
+                            className={styles.iconBtn}
+                            onClick={() => setIsSearchOpen(true)}
+                        />
+                    </>
+                )}
+            </div>
+            <div className={styles.fundingGridContainer}>
+                <div className={styles.fundingHeaderRow}>
+                    <span>TICKER</span>
+                    <span>APR 1H</span>
+                    <span>24H_VOL</span>
+                </div>
+                <div className={styles.fundingList}>
+                    {filteredFunding.length > 0 ? (
+                        filteredFunding.map(f => (
+                            <div key={f.symbol} className={styles.fundingRow}>
+                                <span className={styles.fundingSymbol}>{f.symbol}</span>
+                                <span className={f.apr1h >= 0 ? styles.aprPositive : styles.aprNegative}>
+                                    {f.apr1h >= 0 ? '+' : ''}{f.apr1h.toFixed(2)}%
+                                </span>
+                                <span className={styles.fundingVol}>${fmtVol(f.volume24h)}</span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className={styles.fundingRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>
+                            {funding?.fundingStats ? 'NO DATA' : 'LOADING...'}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
