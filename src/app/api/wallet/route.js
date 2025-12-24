@@ -1,282 +1,316 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rateLimit';
 
-const WALLET_ADDRESS = "0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC";
-const API_KEY = process.env.ETHERSCAN_API_KEY || "YourApiKeyToken"; // Fallback to demo key
-const BASE_URL = "https://api.etherscan.io/v2/api";
-const CHAIN_ID = "1"; // Ethereum Mainnet
+const WALLET_ADDRESS = '0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC';
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
 
-export async function GET() {
+export async function GET(request) {
     try {
-        // 1. Fetch Token Transfers (Last 1000)
-        // V2: module=account&action=tokentx&chainid=1&address={address}&page=1&offset=1000&sort=desc&apikey={apikey}
-        const tokenRes = await fetch(`${BASE_URL}?chainid=${CHAIN_ID}&module=account&action=tokentx&address=${WALLET_ADDRESS}&page=1&offset=1000&sort=desc&apikey=${API_KEY}`, {
-            next: { revalidate: 30 } // Cache for 30s
-        });
-        const tokenData = await tokenRes.json();
+        // Rate limiting
+        const rateLimitResult = rateLimit(request, 'publicApi');
+        if (!rateLimitResult.success) {
+            return NextResponse.json(
+                { 
+                    error: 'Rate limit exceeded',
+                    retryAfter: rateLimitResult.reset 
+                },
+                { 
+                    status: 429,
+                    headers: {
+                        ...getRateLimitHeaders(rateLimitResult),
+                        'Retry-After': rateLimitResult.reset.toString(),
+                    }
+                }
+            );
+        }
 
-        // 1b. Fetch Regular ETH Transactions (Last 1000)
-        // V2: module=account&action=txlist&chainid=1&address={address}&page=1&offset=1000&sort=desc&apikey={apikey}
-        const ethTxRes = await fetch(`${BASE_URL}?chainid=${CHAIN_ID}&module=account&action=txlist&address=${WALLET_ADDRESS}&page=1&offset=1000&sort=desc&apikey=${API_KEY}`, {
-            next: { revalidate: 30 } // Cache for 30s
-        });
-        const ethTxData = await ethTxRes.json();
-
-        // 2. Fetch Pending Count
-        // V2: module=proxy&action=eth_getTransactionCount&chainid=1&address={address}&tag=pending&apikey={apikey}
-        const pendingRes = await fetch(`${BASE_URL}?chainid=${CHAIN_ID}&module=proxy&action=eth_getTransactionCount&address=${WALLET_ADDRESS}&tag=pending&apikey=${API_KEY}`, {
-            cache: 'no-store' // Do not cache real-time status
-        });
-        const pendingData = await pendingRes.json();
-
-        // 3. Fetch Latest Count
-        // V2: module=proxy&action=eth_getTransactionCount&chainid=1&address={address}&tag=latest&apikey={apikey}
-        const latestRes = await fetch(`${BASE_URL}?chainid=${CHAIN_ID}&module=proxy&action=eth_getTransactionCount&address=${WALLET_ADDRESS}&tag=latest&apikey=${API_KEY}`, {
-            cache: 'no-store'
-        });
-        const latestData = await latestRes.json();
-
-        // Process Data
-        let topTokens = [];
-        let tokensIn = {}; // Track incoming volumes
-        let tokensOut = {}; // Track outgoing volumes
-
-        const now = Date.now() / 1000;
+        const now = Math.floor(Date.now() / 1000);
         const oneDayAgo = now - 86400;
 
-        // Process ERC-20 Token Transfers
-        if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
-            tokenData.result.forEach(tx => {
-                const timestamp = parseInt(tx.timeStamp);
-                if (timestamp <= oneDayAgo) return;
+        // Fetch ERC-20 token transfers
+        const tokenTxRes = await fetch(
+            `https://api.etherscan.io/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            { next: { revalidate: 300 } }
+        );
+        const tokenTxData = await tokenTxRes.json();
 
-                const symbol = tx.tokenSymbol;
-                const decimal = parseInt(tx.tokenDecimal);
-                const val = parseFloat(tx.value) / Math.pow(10, decimal);
-                const isFromWallet = tx.from.toLowerCase() === WALLET_ADDRESS.toLowerCase();
-                const isToWallet = tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase();
+        // Fetch normal ETH transactions
+        const ethTxRes = await fetch(
+            `https://api.etherscan.io/api?module=account&action=txlist&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            { next: { revalidate: 300 } }
+        );
+        const ethTxData = await ethTxRes.json();
 
-                if (isFromWallet) {
-                    // Outgoing transaction
-                    if (!tokensOut[symbol]) {
-                        tokensOut[symbol] = 0;
-                    }
-                    tokensOut[symbol] += val;
-                }
+        // Get pending transactions count
+        const pendingRes = await fetch(
+            `https://api.etherscan.io/api?module=account&action=txlist&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            { next: { revalidate: 60 } }
+        );
+        const pendingData = await pendingRes.json();
+        const pendingTxCount = pendingData.result?.filter(tx => !tx.blockNumber || tx.blockNumber === '0').length || 0;
 
-                if (isToWallet) {
-                    // Incoming transaction
-                    if (!tokensIn[symbol]) {
-                        tokensIn[symbol] = 0;
-                    }
-                    tokensIn[symbol] += val;
+        // Process token transfers
+        const tokensIn = {};
+        const tokensOut = {};
+        const tokenDecimals = {};
+        const tokenNames = {};
+
+        if (tokenTxData.status === '1' && Array.isArray(tokenTxData.result)) {
+            tokenTxData.result.forEach(tx => {
+                const txTime = parseInt(tx.timeStamp);
+                if (txTime < oneDayAgo) return;
+
+                const symbol = tx.tokenSymbol || 'UNKNOWN';
+                const decimals = parseInt(tx.tokenDecimal) || 18;
+                const value = parseFloat(tx.value) / Math.pow(10, decimals);
+
+                tokenDecimals[symbol] = decimals;
+                tokenNames[symbol] = tx.tokenName || symbol;
+
+                if (tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
+                    tokensIn[symbol] = (tokensIn[symbol] || 0) + value;
+                } else if (tx.from.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
+                    tokensOut[symbol] = (tokensOut[symbol] || 0) + value;
                 }
             });
         }
 
-        // Process ETH Transactions (regular transactions, not token transfers)
-        if (ethTxData.status === "1" && Array.isArray(ethTxData.result)) {
+        // Process ETH transactions
+        let ethInVolume = 0;
+        let ethOutVolume = 0;
+
+        if (ethTxData.status === '1' && Array.isArray(ethTxData.result)) {
             let ethTxCount = 0;
             let ethTxWithValue = 0;
-            
+
             ethTxData.result.forEach(tx => {
-                const timestamp = parseInt(tx.timeStamp);
-                if (timestamp <= oneDayAgo) return;
-                
+                const txTime = parseInt(tx.timeStamp);
+                if (txTime < oneDayAgo) return;
+
                 ethTxCount++;
+                const ethValue = parseFloat(tx.value) / 1e18;
 
-                // Convert Wei to ETH (1 ETH = 10^18 Wei)
-                const ethValue = parseFloat(tx.value) / Math.pow(10, 18);
-                const isFromWallet = tx.from.toLowerCase() === WALLET_ADDRESS.toLowerCase();
-                const isToWallet = tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase();
-
-                // Only track transactions with actual ETH value transfers (exclude contract calls with 0 ETH)
-                if (ethValue > 0) {
+                if (ethValue > 0.000000001) {
                     ethTxWithValue++;
-                    
-                    if (isFromWallet) {
-                        // Outgoing ETH
-                        if (!tokensOut['ETH']) {
-                            tokensOut['ETH'] = 0;
-                        }
-                        tokensOut['ETH'] += ethValue;
-                    }
-
-                    if (isToWallet) {
-                        // Incoming ETH
-                        if (!tokensIn['ETH']) {
-                            tokensIn['ETH'] = 0;
-                        }
-                        tokensIn['ETH'] += ethValue;
+                    if (tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
+                        ethInVolume += ethValue;
+                    } else if (tx.from.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
+                        ethOutVolume += ethValue;
                     }
                 }
             });
-            
-            // Log ETH processing for debugging
-            console.log(`ETH Transactions processed: ${ethTxCount} total, ${ethTxWithValue} with value > 0`);
-            console.log(`ETH Volumes - IN: ${tokensIn['ETH'] || 0}, OUT: ${tokensOut['ETH'] || 0}`);
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`ETH Transactions processed: ${ethTxCount} total, ${ethTxWithValue} with value > 0`);
+                console.log(`ETH Volumes - IN: ${tokensIn['ETH'] || 0}, OUT: ${tokensOut['ETH'] || 0}`);
+            }
         } else {
-            console.log(`ETH Transaction fetch failed or empty. Status: ${ethTxData.status}`);
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`ETH Transaction fetch failed or empty. Status: ${ethTxData.status}`);
+            }
         }
 
-        // Get unique token symbols and their contract addresses
-        const tokenMap = {}; // symbol -> contractAddress
-        if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
-            tokenData.result.forEach(tx => {
-                const timestamp = parseInt(tx.timeStamp);
-                if (timestamp <= oneDayAgo) return;
-                
-                const symbol = tx.tokenSymbol;
-                const contractAddress = tx.contractAddress;
-                if (symbol && contractAddress && !tokenMap[symbol]) {
-                    tokenMap[symbol] = contractAddress.toLowerCase();
-                }
-            });
+        if (ethInVolume > 0) {
+            tokensIn['ETH'] = (tokensIn['ETH'] || 0) + ethInVolume;
+        }
+        if (ethOutVolume > 0) {
+            tokensOut['ETH'] = (tokensOut['ETH'] || 0) + ethOutVolume;
         }
 
+        // Collect all unique token symbols
         const allSymbols = new Set([...Object.keys(tokensIn), ...Object.keys(tokensOut)]);
-        
-        // Map common token symbols to CoinGecko IDs for direct price lookup
+
+        // Mapping for common tokens to CoinGecko IDs
         const symbolToCoinGeckoId = {
-            'ETH': 'ethereum',
             'USDT': 'tether',
             'USDC': 'usd-coin',
-            'PEPE': 'pepe',
-            'SHIB': 'shiba-inu',
-            'FLOKI': 'floki',
-            'CHZ': 'chiliz',
-            'PNK': 'kleros',
-            'WBTC': 'wrapped-bitcoin',
             'DAI': 'dai',
-            'UNI': 'uniswap',
+            'WETH': 'weth',
+            'WBTC': 'wrapped-bitcoin',
             'LINK': 'chainlink',
-            'MATIC': 'matic-network',
+            'UNI': 'uniswap',
             'AAVE': 'aave',
-            'CRV': 'curve-dao-token'
+            'MATIC': 'matic-network',
+            'SHIB': 'shiba-inu',
+            'CRV': 'curve-dao-token',
+            'MKR': 'maker',
+            'SNX': 'havven',
+            'COMP': 'compound-governance-token',
+            'YFI': 'yearn-finance',
+            'SUSHI': 'sushi',
+            'GRT': 'the-graph',
+            'BAT': 'basic-attention-token',
+            'ENJ': 'enjincoin',
+            'MANA': 'decentraland',
+            'SAND': 'the-sandbox',
+            'AXS': 'axie-infinity',
+            'FTM': 'fantom',
+            'AVAX': 'avalanche-2',
+            'ATOM': 'cosmos',
+            'DOT': 'polkadot',
+            'SOL': 'solana',
+            'ADA': 'cardano',
+            'XRP': 'ripple',
+            'DOGE': 'dogecoin',
+            'LTC': 'litecoin',
+            'BCH': 'bitcoin-cash',
+            'ETC': 'ethereum-classic',
+            'XLM': 'stellar',
+            'XMR': 'monero',
+            'TRX': 'tron',
+            'EOS': 'eos',
+            'NEO': 'neo',
+            'VET': 'vechain',
+            'THETA': 'theta-token',
+            'FIL': 'filecoin',
+            'ALGO': 'algorand',
+            'XTZ': 'tezos',
+            'DASH': 'dash',
+            'ZEC': 'zcash',
+            'WAVES': 'waves',
+            'QTUM': 'qtum',
+            'ONT': 'ontology',
+            'ZIL': 'zilliqa',
+            'ICX': 'icon',
+            'OMG': 'omisego',
+            'ZRX': '0x',
+            'LEND': 'ethlend',
+            'REN': 'republic-protocol',
+            'KNC': 'kyber-network',
+            'BAL': 'balancer',
+            'BAND': 'band-protocol',
+            'NMR': 'numeraire',
+            'ANT': 'aragon',
+            'REP': 'augur',
+            'LRC': 'loopring',
+            'STORJ': 'storj',
+            'GNO': 'gnosis',
+            'RLC': 'iexec-rlc',
+            'BNT': 'bancor',
+            'MLN': 'melon',
+            'POLY': 'polymath',
+            'POWR': 'power-ledger',
+            'REQ': 'request-network',
+            'MONA': 'monavale',
+            'MTL': 'metal',
+            'PAY': 'tenx',
+            'SALT': 'salt',
+            'STORJ': 'storj',
+            'SUB': 'substratum',
+            'TNB': 'time-new-bank',
+            'TNT': 'tierion',
+            'TRX': 'tron',
+            'VEN': 'vechain',
+            'VIB': 'viberate',
+            'VIBE': 'vibe',
+            'WABI': 'wabi',
+            'WTC': 'waltonchain',
+            'XVG': 'verge',
+            'XZC': 'zcoin',
+            'YOYO': 'yoyow'
         };
-        
-        // Attempt to fetch token prices from CoinGecko
-        let tokenPrices = {};
+
+        // Fetch token prices from CoinGecko
+        const tokenPrices = {};
         try {
-            // Strategy 1: Fetch prices by CoinGecko ID for known tokens
-            const knownTokenIds = Array.from(allSymbols)
-                .filter(symbol => symbolToCoinGeckoId[symbol])
-                .map(symbol => symbolToCoinGeckoId[symbol]);
-            
-            if (knownTokenIds.length > 0) {
-                const idsToFetch = knownTokenIds.join(',');
-                const knownPriceRes = await fetch(
-                    `https://api.coingecko.com/api/v3/simple/price?ids=${idsToFetch}&vs_currencies=usd`,
-                    {
-                        next: { revalidate: 300 } // Cache for 5 minutes
+            const contractAddresses = new Map();
+            if (tokenTxData.status === '1' && Array.isArray(tokenTxData.result)) {
+                tokenTxData.result.forEach(tx => {
+                    const symbol = tx.tokenSymbol || 'UNKNOWN';
+                    if (allSymbols.has(symbol) && tx.contractAddress) {
+                        contractAddresses.set(symbol, tx.contractAddress.toLowerCase());
                     }
-                );
-                
-                if (knownPriceRes.ok) {
-                    const knownPriceData = await knownPriceRes.json();
-                    // Map CoinGecko IDs back to symbols
-                    Object.keys(knownPriceData).forEach(coinGeckoId => {
-                        const symbol = Object.keys(symbolToCoinGeckoId).find(s => 
-                            symbolToCoinGeckoId[s] === coinGeckoId
-                        );
-                        if (symbol && knownPriceData[coinGeckoId]?.usd) {
-                            tokenPrices[symbol] = knownPriceData[coinGeckoId].usd;
-                        }
-                    });
-                }
+                });
             }
 
-            // Strategy 2: Fetch ERC-20 token prices using contract addresses (for unknown tokens)
-            const contractAddresses = Array.from(allSymbols)
-                .filter(symbol => !tokenPrices[symbol] && symbol !== 'ETH') // Skip already fetched and ETH
-                .map(symbol => tokenMap[symbol])
-                .filter(addr => addr && addr !== '0x0000000000000000000000000000000000000000');
-            
-            if (contractAddresses.length > 0) {
-                // CoinGecko API allows up to 100 contract addresses per request
-                const addressesToFetch = contractAddresses.slice(0, 100).join(',');
+            const addressesToFetch = Array.from(contractAddresses.values()).join(',');
+            if (addressesToFetch) {
                 try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-                    
-                    const priceRes = await fetch(
-                        `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addressesToFetch}&vs_currencies=usd`,
-                        {
-                            next: { revalidate: 300 }, // Cache for 5 minutes
-                            signal: controller.signal
-                        }
-                    );
-                    
-                    clearTimeout(timeoutId);
-                    
-                    if (priceRes.ok) {
-                        const priceData = await priceRes.json();
-                        // Map contract addresses back to symbols
-                        Object.keys(priceData).forEach(contractAddr => {
-                            const symbol = Object.keys(tokenMap).find(s => 
-                                tokenMap[s]?.toLowerCase() === contractAddr.toLowerCase()
-                            );
-                            if (symbol && priceData[contractAddr]?.usd && !tokenPrices[symbol]) {
-                                tokenPrices[symbol] = priceData[contractAddr].usd;
-                            }
-                        });
-                    } else {
+                    const priceRes = await Promise.race([
+                        fetch(`https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addressesToFetch}&vs_currencies=usd`, {
+                            next: { revalidate: 300 }
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('CoinGecko fetch timed out')), 10000))
+                    ]);
+
+                    if (!priceRes.ok) {
                         console.warn(`CoinGecko API returned status ${priceRes.status}`);
+                    } else {
+                        const priceData = await priceRes.json();
+                        for (const [symbol, address] of contractAddresses.entries()) {
+                            if (priceData[address]?.usd) {
+                                tokenPrices[symbol] = priceData[address].usd;
+                            }
+                        }
                     }
                 } catch (error) {
-                    if (error.name === 'AbortError') {
+                    if (error.message === 'CoinGecko fetch timed out') {
                         console.warn('CoinGecko API request timed out after 10 seconds');
                     } else {
                         console.warn('Error fetching token prices from CoinGecko:', error.message);
                     }
-                    // Continue without prices - tokens will show raw amounts instead of USD
                 }
             }
-            
-            // Log prices fetched for debugging
-            console.log(`Fetched prices for ${Object.keys(tokenPrices).length} tokens:`, Object.keys(tokenPrices));
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`Fetched prices for ${Object.keys(tokenPrices).length} tokens:`, Object.keys(tokenPrices));
+            }
         } catch (error) {
             console.error("Error fetching token prices from CoinGecko:", error);
-            // Continue without prices - will fall back to raw amounts
         }
 
-        // Combine and format token data
-        // Ensure ETH is always included if it has any volume (even if only IN or only OUT)
-        const allSymbolsArray = Array.from(allSymbols);
-        const ethInVolume = tokensIn['ETH'] || 0;
-        const ethOutVolume = tokensOut['ETH'] || 0;
-        
-        // Add ETH if it has volume but wasn't included (shouldn't happen, but safety check)
-        if ((ethInVolume > 0 || ethOutVolume > 0) && !allSymbolsArray.includes('ETH')) {
-            allSymbolsArray.push('ETH');
-            console.log('Added ETH to symbols list - IN:', ethInVolume, 'OUT:', ethOutVolume);
+        // Add ETH price
+        try {
+            const ethPriceRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd', {
+                next: { revalidate: 300 }
+            });
+            const ethPriceData = await ethPriceRes.json();
+            if (ethPriceData.ethereum?.usd) {
+                tokenPrices['ETH'] = ethPriceData.ethereum.usd;
+            }
+        } catch (error) {
+            console.error("Error fetching ETH price:", error);
         }
-        
-        // Log all symbols before processing
-        console.log('All symbols before processing:', Array.from(allSymbols));
-        console.log('ETH volumes - IN:', ethInVolume, 'OUT:', ethOutVolume);
-        
-        topTokens = allSymbolsArray.map(symbol => {
-            const outVolume = tokensOut[symbol] || 0;
+
+        // Ensure ETH is in the symbols list if it has volume
+        if ((ethInVolume > 0 || ethOutVolume > 0) && !allSymbols.has('ETH')) {
+            allSymbols.add('ETH');
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Added ETH to symbols list - IN:', ethInVolume, 'OUT:', ethOutVolume);
+            }
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log('All symbols before processing:', Array.from(allSymbols));
+            console.log('ETH volumes - IN:', ethInVolume, 'OUT:', ethOutVolume);
+        }
+
+        // Build token list with volumes
+        const tokens = Array.from(allSymbols).map(symbol => {
             const inVolume = tokensIn[symbol] || 0;
-            const price = tokenPrices[symbol] || null;
-            
+            const outVolume = tokensOut[symbol] || 0;
+            const price = tokenPrices[symbol] || 0;
+
             return {
                 symbol,
-                volume: outVolume, // Keep for backward compatibility
-                outVolume,
+                name: tokenNames[symbol] || symbol,
                 inVolume,
-                outVolumeUSD: price ? outVolume * price : null,
-                inVolumeUSD: price ? inVolume * price : null
+                outVolume,
+                inVolumeUSD: price > 0 ? inVolume * price : 0,
+                outVolumeUSD: price > 0 ? outVolume * price : 0,
+                price,
             };
-        }).sort((a, b) => {
-            // PRIORITY: ETH always first if it has volume
-            const aIsETH = a.symbol === 'ETH';
-            const bIsETH = b.symbol === 'ETH';
+        });
+
+        // Sort by total volume (IN + OUT) descending, but prioritize ETH if it has volume
+        const topTokens = tokens.sort((a, b) => {
+            // Always put ETH first if it has volume
+            const ethTotalVolume = (ethInVolume + ethOutVolume);
+            if (a.symbol === 'ETH' && ethTotalVolume > 0) return -1;
+            if (b.symbol === 'ETH' && ethTotalVolume > 0) return 1;
+            
             const aTotalVolume = (a.outVolume || 0) + (a.inVolume || 0);
             const bTotalVolume = (b.outVolume || 0) + (b.inVolume || 0);
-            
-            if (aIsETH && aTotalVolume > 0) return -1; // ETH first
-            if (bIsETH && bTotalVolume > 0) return 1;  // ETH first
             
             // Sort by total volume descending
             return bTotalVolume - aTotalVolume;
@@ -293,41 +327,38 @@ export async function GET() {
         });
         
         // Log final tokens for debugging
-        console.log(`Final tokens in response (${topTokens.length}):`, topTokens.map(t => `${t.symbol}(IN:${t.inVolume},OUT:${t.outVolume})`).join(', '));
-        const ethToken = topTokens.find(t => t.symbol === 'ETH');
-        if (ethToken) {
-            console.log(`✅ ETH found in response - IN: ${ethToken.inVolume}, OUT: ${ethToken.outVolume}, IN_USD: ${ethToken.inVolumeUSD}, OUT_USD: ${ethToken.outVolumeUSD}`);
-        } else {
-            console.log('❌ ETH NOT found in final response');
-            if (ethInVolume > 0 || ethOutVolume > 0) {
-                console.log('⚠️ ETH has volume but was excluded - this is a bug!');
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`Final tokens in response (${topTokens.length}):`, topTokens.map(t => `${t.symbol}(IN:${t.inVolume},OUT:${t.outVolume})`).join(', '));
+            const ethToken = topTokens.find(t => t.symbol === 'ETH');
+            if (ethToken) {
+                console.log(`✅ ETH found in response - IN: ${ethToken.inVolume}, OUT: ${ethToken.outVolume}, IN_USD: ${ethToken.inVolumeUSD}, OUT_USD: ${ethToken.outVolumeUSD}`);
             } else {
-                console.log('ℹ️ ETH has no volume in last 24h, so it was correctly excluded');
+                console.log('❌ ETH NOT found in final response');
+                if (ethInVolume > 0 || ethOutVolume > 0) {
+                    console.log('⚠️ ETH has volume but was excluded - this is a bug!');
+                } else {
+                    console.log('ℹ️ ETH has no volume in last 24h, so it was correctly excluded');
+                }
             }
         }
 
-        // Process Pending Status
-        let pendingCount = 0;
-        if (pendingData.result && latestData.result) {
-            const pCount = parseInt(pendingData.result, 16); // Hex to Dec
-            const lCount = parseInt(latestData.result, 16);
-            pendingCount = Math.max(0, pCount - lCount);
-        }
-
-        return NextResponse.json({
-            topTokens,
-            pendingCount,
-            status: pendingCount >= 5 ? "WARNING" : "OPERATIONAL",
-            lastUpdate: new Date().toISOString()
-        });
+        return NextResponse.json(
+            {
+                address: WALLET_ADDRESS,
+                pendingTxCount,
+                tokens: topTokens,
+                lastUpdate: new Date().toISOString(),
+            },
+            {
+                headers: getRateLimitHeaders(rateLimitResult)
+            }
+        );
 
     } catch (error) {
         console.error("Etherscan API Error:", error);
-        return NextResponse.json({
-            topTokens: [],
-            pendingCount: 0,
-            status: "ERROR",
-            error: error.message
-        }, { status: 500 });
+        return NextResponse.json(
+            { error: "Failed to fetch wallet data" },
+            { status: 500 }
+        );
     }
 }

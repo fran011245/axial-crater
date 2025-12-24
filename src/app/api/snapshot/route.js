@@ -1,16 +1,59 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, getRateLimitHeaders, isSupabaseEdgeFunction } from '@/lib/rateLimit';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Server-only secrets (DO NOT prefix with NEXT_PUBLIC_)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SNAPSHOT_SECRET = process.env.SNAPSHOT_SECRET;
 
 export async function POST(request) {
     try {
-        // Determine the base URL for internal API calls
-        const protocol = request.headers.get('x-forwarded-proto') || 'http';
-        const host = request.headers.get('host') || 'localhost:3001';
-        const baseUrl = `${protocol}://${host}`;
+        // Require a secret header to prevent public triggering (DoS / cost leak)
+        // Edge/Cron callers should send: x-snapshot-secret: <SNAPSHOT_SECRET>
+        if (!SNAPSHOT_SECRET) {
+            return NextResponse.json(
+                { success: false, error: 'Server missing SNAPSHOT_SECRET' },
+                { status: 500 }
+            );
+        }
+        const provided = request.headers.get('x-snapshot-secret') || '';
+        if (provided !== SNAPSHOT_SECRET) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
 
-        console.log('[Snapshot] Starting snapshot collection...');
+        // Rate limiting (bypass for Supabase Edge Functions)
+        if (!isSupabaseEdgeFunction(request)) {
+            const rateLimitResult = rateLimit(request, 'snapshot');
+            if (!rateLimitResult.success) {
+                return NextResponse.json(
+                    { 
+                        success: false, 
+                        error: 'Rate limit exceeded',
+                        retryAfter: rateLimitResult.reset 
+                    },
+                    { 
+                        status: 429,
+                        headers: {
+                            ...getRateLimitHeaders(rateLimitResult),
+                            'Retry-After': rateLimitResult.reset.toString(),
+                        }
+                    }
+                );
+            }
+        }
+
+        if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+            return NextResponse.json(
+                { success: false, error: 'Server missing Supabase service role configuration' },
+                { status: 500 }
+            );
+        }
+
+        // Safe origin (avoid Host header injection / SSRF)
+        const baseUrl = new URL(request.url).origin;
+
+        const isProd = process.env.NODE_ENV === 'production';
+        if (!isProd) console.log('[Snapshot] Starting snapshot collection...');
 
         // Fetch current data from existing APIs in parallel
         const [volumeRes, fundingRes, walletRes] = await Promise.all([
@@ -27,7 +70,7 @@ export async function POST(request) {
         const fundingData = await fundingRes.json();
         const walletData = await walletRes.json();
 
-        console.log('[Snapshot] Data fetched successfully');
+        if (!isProd) console.log('[Snapshot] Data fetched successfully');
 
         // Prepare data for insertion
         const timestamp = new Date().toISOString();
@@ -37,14 +80,16 @@ export async function POST(request) {
             timestamp,
             total_volume_usd: volumeData.totalVolumeUSD || null,
             ticker_count: volumeData.tickerCount || null,
-            top_pairs: JSON.stringify(volumeData.topPairs || []),
-            low_pairs: JSON.stringify(volumeData.lowPairs || [])
+            // Store JSONB as actual JSON (not a string)
+            top_pairs: volumeData.topPairs || [],
+            low_pairs: volumeData.lowPairs || []
         };
 
         // 2. Funding Snapshot
         const fundingSnapshot = {
             timestamp,
-            funding_stats: JSON.stringify(fundingData.fundingStats || [])
+            // Store JSONB as actual JSON (not a string)
+            funding_stats: fundingData.fundingStats || []
         };
 
         // 3. Wallet Snapshot
@@ -52,7 +97,8 @@ export async function POST(request) {
             timestamp,
             wallet_address: '0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC',
             pending_tx_count: walletData.pendingTxCount || null,
-            tokens: JSON.stringify(walletData.tokens || [])
+            // Store JSONB as actual JSON (not a string)
+            tokens: walletData.tokens || []
         };
 
         // Insert into Supabase using REST API
@@ -62,8 +108,8 @@ export async function POST(request) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                     'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify(volumeSnapshot)
@@ -73,8 +119,8 @@ export async function POST(request) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                     'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify(fundingSnapshot)
@@ -84,8 +130,8 @@ export async function POST(request) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                     'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify(walletSnapshot)
@@ -109,7 +155,7 @@ export async function POST(request) {
             throw new Error('One or more database inserts failed');
         }
 
-        console.log('[Snapshot] All snapshots saved successfully');
+        if (!isProd) console.log('[Snapshot] All snapshots saved successfully');
 
         return NextResponse.json({
             success: true,

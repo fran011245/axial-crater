@@ -179,37 +179,22 @@ export default function TerminalPage() {
             try {
                 const res = await fetch('/api/funding');
                 const data = await res.json();
-                console.log('Funding data fetched:', data);
                 setFundingData(data);
             } catch (e) { console.error('Funding fetch error:', e); }
         }
         fetchFunding();
         const fundingTimer = setInterval(fetchFunding, 60000);
 
-        // Snapshot Saving (5 minute interval)
-        // Only save when tab is active to conserve resources
-        const snapshotTimer = setInterval(async () => {
-            if (!document.hidden) {
-                try {
-                    console.log('[Snapshot] Triggering snapshot save...');
-                    const res = await fetch('/api/snapshot', { method: 'POST' });
-                    const result = await res.json();
-                    if (result.success) {
-                        console.log('[Snapshot] Saved successfully:', result);
-                    } else {
-                        console.warn('[Snapshot] Save failed:', result);
-                    }
-                } catch (e) {
-                    console.warn('[Snapshot] Save error:', e);
-                }
-            }
-        }, 5 * 60 * 1000); // 5 minutes
+        // Snapshot Saving:
+        // Disabled on the client for security (no safe place to keep a write secret in the browser).
+        // Use Supabase Cron / Edge Function (or Vercel Cron) to call /api/snapshot with x-snapshot-secret.
+        const snapshotTimer = null;
 
         return () => {
             clearInterval(timer);
             clearInterval(walletTimer);
             clearInterval(fundingTimer);
-            clearInterval(snapshotTimer);
+            if (snapshotTimer) clearInterval(snapshotTimer);
         };
     }, [isMounted]);
 

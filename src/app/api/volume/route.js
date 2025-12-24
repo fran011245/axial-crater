@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rateLimit';
 
-export async function GET() {
+export async function GET(request) {
     try {
+        // Rate limiting
+        const rateLimitResult = rateLimit(request, 'publicApi');
+        if (!rateLimitResult.success) {
+            return NextResponse.json(
+                { 
+                    error: 'Rate limit exceeded',
+                    retryAfter: rateLimitResult.reset 
+                },
+                { 
+                    status: 429,
+                    headers: {
+                        ...getRateLimitHeaders(rateLimitResult),
+                        'Retry-After': rateLimitResult.reset.toString(),
+                    }
+                }
+            );
+        }
+
         // Fetch valid trading pairs list for URL mapping
         const pairsRes = await fetch('https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange', {
             headers: { 'Content-Type': 'application/json' },
@@ -154,13 +173,18 @@ export async function GET() {
             }
         }));
 
-        return NextResponse.json({
-            totalVolumeUSD,
-            tickerCount: data.length,
-            topPairs,
-            lowPairs,
-            pairUrlMap // Mapeo de símbolos a formato URL para Bitfinex trading
-        });
+        return NextResponse.json(
+            {
+                totalVolumeUSD,
+                tickerCount: data.length,
+                topPairs,
+                lowPairs,
+                pairUrlMap // Mapeo de símbolos a formato URL para Bitfinex trading
+            },
+            {
+                headers: getRateLimitHeaders(rateLimitResult)
+            }
+        );
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Failed to fetch volume' }, { status: 500 });

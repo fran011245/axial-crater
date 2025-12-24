@@ -1,8 +1,27 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rateLimit';
 import { getNetworkName } from '../../../utils/networkMapper';
 
-export async function GET() {
+export async function GET(request) {
     try {
+        // Rate limiting
+        const rateLimitResult = rateLimit(request, 'publicApi');
+        if (!rateLimitResult.success) {
+            return NextResponse.json(
+                { 
+                    error: 'Rate limit exceeded',
+                    retryAfter: rateLimitResult.reset 
+                },
+                { 
+                    status: 429,
+                    headers: {
+                        ...getRateLimitHeaders(rateLimitResult),
+                        'Retry-After': rateLimitResult.reset.toString(),
+                    }
+                }
+            );
+        }
+
         const [statusRes, methodRes] = await Promise.all([
             fetch('https://api-pub.bitfinex.com/v2/conf/pub:info:tx:status', { cache: 'no-store' }),
             fetch('https://api-pub.bitfinex.com/v2/conf/pub:map:tx:method', { cache: 'no-store' })
@@ -44,7 +63,12 @@ export async function GET() {
             };
         });
 
-        return NextResponse.json(movements);
+        return NextResponse.json(
+            movements,
+            {
+                headers: getRateLimitHeaders(rateLimitResult)
+            }
+        );
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Failed to fetch movements' }, { status: 500 });

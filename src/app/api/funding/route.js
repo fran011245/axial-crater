@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server';
+import { rateLimit, getRateLimitHeaders } from '@/lib/rateLimit';
 
-export async function GET() {
+export async function GET(request) {
     try {
+        // Rate limiting
+        const rateLimitResult = rateLimit(request, 'publicApi');
+        if (!rateLimitResult.success) {
+            return NextResponse.json(
+                { 
+                    error: 'Rate limit exceeded',
+                    retryAfter: rateLimitResult.reset 
+                },
+                { 
+                    status: 429,
+                    headers: {
+                        ...getRateLimitHeaders(rateLimitResult),
+                        'Retry-After': rateLimitResult.reset.toString(),
+                    }
+                }
+            );
+        }
+
         // Fetch ALL tickers to get all funding currencies
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -52,10 +71,15 @@ export async function GET() {
             .sort((a, b) => b.volume24h - a.volume24h) // Sort by volume descending
             .slice(0, 5); // Top 5
 
-        return NextResponse.json({
-            fundingStats: fundingTickers,
-            lastUpdate: new Date().toISOString()
-        });
+        return NextResponse.json(
+            {
+                fundingStats: fundingTickers,
+                lastUpdate: new Date().toISOString()
+            },
+            {
+                headers: getRateLimitHeaders(rateLimitResult)
+            }
+        );
     } catch (error) {
         if (error.name === 'AbortError') {
             console.warn('Funding API request timed out after 10 seconds');
