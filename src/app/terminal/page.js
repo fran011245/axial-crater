@@ -41,32 +41,32 @@ export default function TerminalPage() {
             { i: 'liquidity', x: 0, y: 1.5, w: 3, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 3, y: 0, w: 9, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 3.5, w: 3, h: 2.5, minW: 2, minH: 1 },
-            { i: 'funding', x: 0, y: 6.0, w: 3, h: 2, minW: 2, minH: 1.5, static: false },
-            { i: 'feed', x: 3, y: 4.1, w: 9, h: 3.9, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 3, y: 4.1, w: 9, h: 3.9, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 8.0, w: 3, h: 2, minW: 2, minH: 1.5, static: false }
         ],
         md: [
             { i: 'vitals', x: 0, y: 0, w: 3, h: 1.5, minW: 2, minH: 1 },
             { i: 'liquidity', x: 0, y: 1.5, w: 3, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 3, y: 0, w: 7, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 3.5, w: 3, h: 2.5, minW: 2, minH: 1 },
-            { i: 'funding', x: 0, y: 6.0, w: 3, h: 2, minW: 2, minH: 1.5 },
-            { i: 'feed', x: 3, y: 4.1, w: 7, h: 3.9, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 3, y: 4.1, w: 7, h: 3.9, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 8.0, w: 3, h: 2, minW: 2, minH: 1.5 }
         ],
         sm: [
             { i: 'vitals', x: 0, y: 0, w: 6, h: 1.5, minW: 2, minH: 1 },
             { i: 'liquidity', x: 0, y: 1.5, w: 6, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 0, y: 3.5, w: 6, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 7.6, w: 6, h: 2.5, minW: 2, minH: 1 },
-            { i: 'funding', x: 0, y: 10.1, w: 6, h: 2, minW: 2, minH: 1.5 },
-            { i: 'feed', x: 0, y: 12.1, w: 6, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 0, y: 12.1, w: 6, h: 2.0, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 14.1, w: 6, h: 2, minW: 2, minH: 1.5 }
         ],
         xs: [
             { i: 'vitals', x: 0, y: 0, w: 4, h: 1.5, minW: 2, minH: 1 },
             { i: 'liquidity', x: 0, y: 1.5, w: 4, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 0, y: 3.5, w: 4, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 7.6, w: 4, h: 2.5, minW: 2, minH: 1 },
-            { i: 'funding', x: 0, y: 10.1, w: 4, h: 2, minW: 2, minH: 1.5 },
-            { i: 'feed', x: 0, y: 12.1, w: 4, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 0, y: 12.1, w: 4, h: 2.0, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 14.1, w: 4, h: 2, minW: 2, minH: 1.5 }
         ]
     };
 

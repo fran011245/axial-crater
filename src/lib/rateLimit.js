@@ -134,3 +134,4 @@ export function isSupabaseEdgeFunction(request) {
   return userAgent.includes('Deno') && cfRay !== null;
 }
 
+

@@ -730,7 +730,7 @@ export const FundingStats = ({ funding, isClassicTheme = false }) => {
     }, [funding?.fundingStats, fundingSearch]);
 
     return (
-        <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <section className={styles.sectorD} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className={styles.warningHeader}>
                 {isSearchOpen ? (
                     <div className={styles.searchContainer}>
@@ -787,6 +787,6 @@ export const FundingStats = ({ funding, isClassicTheme = false }) => {
                     )}
                 </div>
             </div>
-        </div>
+        </section>
     );
 };

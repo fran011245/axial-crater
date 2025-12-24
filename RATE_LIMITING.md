@@ -302,3 +302,4 @@ This ensures cron jobs can trigger `/api/snapshot` without being rate limited.
 
 *Last updated: December 23, 2025*
 
+

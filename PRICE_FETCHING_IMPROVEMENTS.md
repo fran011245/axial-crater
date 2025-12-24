@@ -160,3 +160,4 @@ Y cualquier otro token que CoinGecko tenga por dirección de contrato.
 - **Fallback**: Si CoinGecko falla, se muestran valores raw
 - **Límite**: Máximo 100 direcciones de contrato por request
 
+

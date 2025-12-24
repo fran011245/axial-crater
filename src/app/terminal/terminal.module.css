@@ -14,27 +14,32 @@
     letter-spacing: 0.3px;
 }
 
-/* Global Scrollbar */
-::-webkit-scrollbar {
+/* Global Scrollbar - Liquid Glass Effect */
+:global(::-webkit-scrollbar) {
     width: 8px;
     height: 8px;
 }
 
-::-webkit-scrollbar-track {
-    background: #161b22;
-    border-left: 1px solid #30363d;
+:global(::-webkit-scrollbar-track) {
+    background: transparent;
+    border: none;
 }
 
-::-webkit-scrollbar-thumb {
-    background: #58a6ff;
-    border: 1px solid #0d1117;
+:global(::-webkit-scrollbar-thumb) {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
-    transition: background 0.2s ease;
+    transition: all 0.3s ease;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: #79c0ff;
+:global(::-webkit-scrollbar-thumb:hover) {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.25);
 }
+
+/* Firefox scrollbar - applied globally via globals.css */
 
 /* Layout Grid */
 .gridContainer {
@@ -209,15 +214,19 @@
 .warningList {
     flex: 1;
     overflow-y: auto;
-    scrollbar-color: #58a6ff #161b22;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 .warningList::-webkit-scrollbar-thumb {
-    background-color: #58a6ff;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
 }
 
 .warningList::-webkit-scrollbar-track {
-    background: #161b22;
+    background: transparent;
 }
 
 .warningRow {
@@ -525,7 +534,6 @@
     color: #888;
 }
 
-.walletList {}
 
 .walletRow {
     display: grid;
@@ -619,15 +627,19 @@
 .fundingList {
     flex: 1;
     overflow-y: auto;
-    scrollbar-color: #58a6ff #161b22;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 .fundingList::-webkit-scrollbar-thumb {
-    background-color: #58a6ff;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
 }
 
 .fundingList::-webkit-scrollbar-track {
-    background: #161b22;
+    background: transparent;
 }
 
 .fundingRow {
@@ -939,17 +951,21 @@
 }
 
 .terminalBody[data-theme="classic"] ::-webkit-scrollbar-track {
-    background: #110a00;
-    border-left: 1px solid #331a00;
+    background: transparent;
+    border: none;
 }
 
 .terminalBody[data-theme="classic"] ::-webkit-scrollbar-thumb {
-    background: #ff9900;
-    border: 1px solid #000;
+    background: rgba(255, 153, 0, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 153, 0, 0.25);
+    border-radius: 4px;
 }
 
 .terminalBody[data-theme="classic"] ::-webkit-scrollbar-thumb:hover {
-    background: #cc7a00;
+    background: rgba(255, 153, 0, 0.25);
+    border-color: rgba(255, 153, 0, 0.35);
 }
 
 .terminalBody[data-theme="classic"] .header {
@@ -1035,11 +1051,15 @@
 }
 
 .terminalBody[data-theme="classic"] .warningList::-webkit-scrollbar-thumb {
-    background-color: #ff0000;
+    background: rgba(255, 153, 0, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 153, 0, 0.25);
+    border-radius: 4px;
 }
 
 .terminalBody[data-theme="classic"] .warningList::-webkit-scrollbar-track {
-    background: #1a0000;
+    background: transparent;
 }
 
 .terminalBody[data-theme="classic"] .warningRow:nth-child(even) {
@@ -1205,11 +1225,15 @@
 }
 
 .terminalBody[data-theme="classic"] .fundingList::-webkit-scrollbar-thumb {
-    background-color: #ff0000;
+    background: rgba(255, 153, 0, 0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 153, 0, 0.25);
+    border-radius: 4px;
 }
 
 .terminalBody[data-theme="classic"] .fundingList::-webkit-scrollbar-track {
-    background: #1a0000;
+    background: transparent;
 }
 
 .terminalBody[data-theme="classic"] .fundingRow:nth-child(even) {

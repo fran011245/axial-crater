@@ -28,101 +28,293 @@ export async function GET(request) {
         const oneDayAgo = now - 86400;
 
         // Fetch ERC-20 token transfers (using V2 API with chainid=1 for Ethereum mainnet)
+        // Retry logic for Etherscan API
         let tokenTxData = { status: '0', result: [] };
-        try {
-            const tokenTxRes = await fetch(
-                `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-                { next: { revalidate: 300 } }
-            );
-            
-            if (!tokenTxRes.ok) {
-                console.error(`Etherscan token API HTTP error: ${tokenTxRes.status} ${tokenTxRes.statusText}`);
-            }
-            
-            const contentType = tokenTxRes.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                tokenTxData = await tokenTxRes.json();
-            } else {
-                const text = await tokenTxRes.text();
-                console.error('Etherscan token API returned non-JSON:', text.substring(0, 200));
-                tokenTxData = { status: '0', result: [], message: 'Invalid response format' };
-            }
-            
-            // Validate Etherscan response
-            if (tokenTxData.status === '0') {
-                if (tokenTxData.message === 'NOTOK') {
-                    if (tokenTxData.result?.includes('deprecated')) {
-                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
-                    } else if (tokenTxData.result?.includes('Missing/Invalid API Key')) {
-                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
-                        // Return empty result instead of crashing
-                        tokenTxData = { status: '0', result: [], message: 'No API key' };
-                    } else if (tokenTxData.message !== 'No transactions found') {
-                        console.warn('Etherscan token API error:', tokenTxData.message, tokenTxData.result);
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 1000; // 1 second
+        
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
+                
+                const tokenTxRes = await fetch(
+                    `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                    { 
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
                     }
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (!tokenTxRes.ok) {
+                    const errorText = await tokenTxRes.text().catch(() => 'Unable to read error response');
+                    console.error(`Etherscan token API HTTP error (attempt ${attempt}/${MAX_RETRIES}): ${tokenTxRes.status} ${tokenTxRes.statusText}`);
+                    
+                    // Retry on 5xx errors or rate limit (429)
+                    if ((tokenTxRes.status >= 500 || tokenTxRes.status === 429) && attempt < MAX_RETRIES) {
+                        console.warn(`Retrying Etherscan token API in ${RETRY_DELAY}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt)); // Exponential backoff
+                        continue;
+                    }
+                    
+                    tokenTxData = { status: '0', result: [], message: `HTTP ${tokenTxRes.status}: ${errorText.substring(0, 100)}` };
+                    break;
                 }
-            } else if (tokenTxData.status === '1') {
+                
+                const contentType = tokenTxRes.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    tokenTxData = await tokenTxRes.json();
+                } else {
+                    const text = await tokenTxRes.text();
+                    console.error(`Etherscan token API returned non-JSON (attempt ${attempt}/${MAX_RETRIES}):`, text.substring(0, 200));
+                    
+                    if (attempt < MAX_RETRIES) {
+                        console.warn(`Retrying Etherscan token API in ${RETRY_DELAY}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                        continue;
+                    }
+                    
+                    tokenTxData = { status: '0', result: [], message: 'Invalid response format' };
+                    break;
+                }
+                
+                // Validate Etherscan response
+                if (tokenTxData.status === '0') {
+                    if (tokenTxData.message === 'NOTOK') {
+                        if (tokenTxData.result?.includes('deprecated')) {
+                            console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+                            break; // Don't retry deprecated API
+                        } else if (tokenTxData.result?.includes('Missing/Invalid API Key')) {
+                            console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                            tokenTxData = { status: '0', result: [], message: 'No API key' };
+                            break; // Don't retry invalid API key
+                        } else if (tokenTxData.result?.includes('timeout') || tokenTxData.result?.includes('server too busy')) {
+                            // Retry on timeout/busy errors
+                            if (attempt < MAX_RETRIES) {
+                                console.warn(`Etherscan timeout/busy (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY * attempt}ms...`);
+                                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                                continue;
+                            } else {
+                                console.error('Etherscan API timeout/busy after all retries:', tokenTxData.message);
+                            }
+                        } else if (tokenTxData.message !== 'No transactions found') {
+                            console.warn(`Etherscan token API error (attempt ${attempt}/${MAX_RETRIES}):`, tokenTxData.message, tokenTxData.result);
+                            // Don't retry on other NOTOK errors
+                            break;
+                        }
+                    }
+                } else if (tokenTxData.status === '1') {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ Token transfers fetched successfully (attempt ${attempt}): ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
+                        if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
+                            console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
+                        }
+                    }
+                    break; // Success, exit retry loop
+                }
+                
+            } catch (error) {
+                const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                
+                console.error(`Error fetching token transfers (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
+                
                 if (process.env.NODE_ENV === 'development') {
-                    console.log(`✅ Token transfers fetched successfully: ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
-                    if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
-                        console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
-                    }
+                    console.error('Full error:', error);
                 }
+                
+                // Retry on timeout or network errors
+                if ((isTimeout || isNetworkError) && attempt < MAX_RETRIES) {
+                    console.warn(`Retrying Etherscan token API in ${RETRY_DELAY * attempt}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                    continue;
+                }
+                
+                tokenTxData = { status: '0', result: [], message: error.message };
+                break;
             }
-        } catch (error) {
-            console.error('Error fetching token transfers:', error.message);
-            tokenTxData = { status: '0', result: [] };
+        }
+        
+        if (tokenTxData.status === '0' && tokenTxData.result?.length === 0) {
+            console.warn('⚠️ Failed to fetch token transfers from Etherscan after all retries. Wallet data will be incomplete.');
         }
 
         // Fetch normal ETH transactions (using V2 API with chainid=1 for Ethereum mainnet)
+        // Retry logic for Etherscan API
         let ethTxData = { status: '0', result: [] };
-        try {
-            const ethTxRes = await fetch(
-                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-                { next: { revalidate: 300 } }
-            );
-            ethTxData = await ethTxRes.json();
-            
-            // Validate Etherscan response
-            if (ethTxData.status === '0') {
-                if (ethTxData.message === 'NOTOK') {
-                    if (ethTxData.result?.includes('deprecated')) {
-                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
-                    } else if (ethTxData.result?.includes('Missing/Invalid API Key')) {
-                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
-                        // Return empty result instead of crashing
-                        ethTxData = { status: '0', result: [], message: 'No API key' };
-                    } else if (ethTxData.message !== 'No transactions found') {
-                        console.warn('Etherscan ETH API error:', ethTxData.message, ethTxData.result);
+        
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
+                
+                const ethTxRes = await fetch(
+                    `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                    { 
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
                     }
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (!ethTxRes.ok) {
+                    const errorText = await ethTxRes.text().catch(() => 'Unable to read error response');
+                    console.error(`Etherscan ETH API HTTP error (attempt ${attempt}/${MAX_RETRIES}): ${ethTxRes.status} ${ethTxRes.statusText}`);
+                    
+                    // Retry on 5xx errors or rate limit (429)
+                    if ((ethTxRes.status >= 500 || ethTxRes.status === 429) && attempt < MAX_RETRIES) {
+                        console.warn(`Retrying Etherscan ETH API in ${RETRY_DELAY}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                        continue;
+                    }
+                    
+                    ethTxData = { status: '0', result: [], message: `HTTP ${ethTxRes.status}: ${errorText.substring(0, 100)}` };
+                    break;
                 }
+                
+                ethTxData = await ethTxRes.json();
+                
+                // Validate Etherscan response
+                if (ethTxData.status === '0') {
+                    if (ethTxData.message === 'NOTOK') {
+                        if (ethTxData.result?.includes('deprecated')) {
+                            console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+                            break; // Don't retry deprecated API
+                        } else if (ethTxData.result?.includes('Missing/Invalid API Key')) {
+                            console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                            ethTxData = { status: '0', result: [], message: 'No API key' };
+                            break; // Don't retry invalid API key
+                        } else if (ethTxData.result?.includes('timeout') || ethTxData.result?.includes('server too busy')) {
+                            // Retry on timeout/busy errors
+                            if (attempt < MAX_RETRIES) {
+                                console.warn(`Etherscan ETH timeout/busy (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY * attempt}ms...`);
+                                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                                continue;
+                            } else {
+                                console.error('Etherscan ETH API timeout/busy after all retries:', ethTxData.message);
+                            }
+                        } else if (ethTxData.message !== 'No transactions found') {
+                            console.warn(`Etherscan ETH API error (attempt ${attempt}/${MAX_RETRIES}):`, ethTxData.message, ethTxData.result);
+                            // Don't retry on other NOTOK errors
+                            break;
+                        }
+                    }
+                } else if (ethTxData.status === '1') {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ ETH transactions fetched successfully (attempt ${attempt}): ${Array.isArray(ethTxData.result) ? ethTxData.result.length : 'N/A'} transactions`);
+                    }
+                    break; // Success, exit retry loop
+                }
+                
+            } catch (error) {
+                const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                
+                console.error(`Error fetching ETH transactions (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
+                
+                if (process.env.NODE_ENV === 'development') {
+                    console.error('Full error:', error);
+                }
+                
+                // Retry on timeout or network errors
+                if ((isTimeout || isNetworkError) && attempt < MAX_RETRIES) {
+                    console.warn(`Retrying Etherscan ETH API in ${RETRY_DELAY * attempt}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                    continue;
+                }
+                
+                ethTxData = { status: '0', result: [], message: error.message };
+                break;
             }
-        } catch (error) {
-            console.error('Error fetching ETH transactions:', error.message);
-            ethTxData = { status: '0', result: [] };
+        }
+        
+        if (ethTxData.status === '0' && ethTxData.result?.length === 0) {
+            console.warn('⚠️ Failed to fetch ETH transactions from Etherscan after all retries. ETH volume will be incomplete.');
         }
 
         // Get pending transactions count (using V2 API with chainid=1 for Ethereum mainnet)
+        // Retry logic for pending transactions (less critical, so fewer retries)
         let pendingData = { status: '0', result: [] };
-        try {
-            const pendingRes = await fetch(
-                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-                { next: { revalidate: 60 } }
-            );
-            pendingData = await pendingRes.json();
-            
-            // Validate response before processing
-            if (pendingData.status === '0' && pendingData.message === 'NOTOK') {
-                if (pendingData.result?.includes('Missing/Invalid API Key')) {
-                    console.warn('⚠️ Etherscan API key invalid for pending transactions check.');
+        const PENDING_MAX_RETRIES = 2;
+        
+        for (let attempt = 1; attempt <= PENDING_MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout per attempt
+                
+                const pendingRes = await fetch(
+                    `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                    { 
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: {
+                            'Accept': 'application/json',
+                        }
+                    }
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (!pendingRes.ok) {
+                    // Don't retry pending transactions on HTTP errors, just log and continue
+                    if (attempt === PENDING_MAX_RETRIES) {
+                        console.warn(`Etherscan pending API HTTP error (final attempt): ${pendingRes.status} ${pendingRes.statusText}`);
+                    }
                     pendingData = { status: '0', result: [] };
-                } else {
-                    console.warn('Etherscan pending API error:', pendingData.message, pendingData.result);
+                    break;
                 }
+                
+                pendingData = await pendingRes.json();
+                
+                // Validate response before processing
+                if (pendingData.status === '0' && pendingData.message === 'NOTOK') {
+                    if (pendingData.result?.includes('Missing/Invalid API Key')) {
+                        console.warn('⚠️ Etherscan API key invalid for pending transactions check.');
+                        pendingData = { status: '0', result: [] };
+                        break; // Don't retry invalid API key
+                    } else if (pendingData.result?.includes('timeout') || pendingData.result?.includes('server too busy')) {
+                        // Retry on timeout/busy errors
+                        if (attempt < PENDING_MAX_RETRIES) {
+                            console.warn(`Etherscan pending timeout/busy (attempt ${attempt}/${PENDING_MAX_RETRIES}), retrying in ${RETRY_DELAY * attempt}ms...`);
+                            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                            continue;
+                        } else {
+                            console.warn('Etherscan pending API timeout/busy after retries:', pendingData.message);
+                        }
+                    } else {
+                        console.warn(`Etherscan pending API error (attempt ${attempt}/${PENDING_MAX_RETRIES}):`, pendingData.message, pendingData.result);
+                        break; // Don't retry on other errors
+                    }
+                } else {
+                    break; // Success or no transactions found, exit retry loop
+                }
+                
+            } catch (error) {
+                const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                
+                if (attempt === PENDING_MAX_RETRIES) {
+                    console.warn(`Error fetching pending transactions (final attempt):`, error.message);
+                }
+                
+                // Retry on timeout or network errors
+                if ((isTimeout || isNetworkError) && attempt < PENDING_MAX_RETRIES) {
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                    continue;
+                }
+                
+                pendingData = { status: '0', result: [] };
+                break;
             }
-        } catch (error) {
-            console.error('Error fetching pending transactions:', error.message);
-            pendingData = { status: '0', result: [] };
         }
         
         const pendingTxCount = (Array.isArray(pendingData.result) 
@@ -236,7 +428,7 @@ export async function GET(request) {
             console.log('Tokens OUT volumes:', Object.entries(tokensOut).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
         }
         
-        // Mapping for common tokens to CoinGecko IDs
+        // Mapping for common tokens to CoinGecko IDs (fallback when contract address lookup fails)
         const symbolToCoinGeckoId = {
             'USDT': 'tether',
             'USDC': 'usd-coin',
@@ -311,11 +503,9 @@ export async function GET(request) {
             'MTL': 'metal',
             'PAY': 'tenx',
             'SALT': 'salt',
-            'STORJ': 'storj',
             'SUB': 'substratum',
             'TNB': 'time-new-bank',
             'TNT': 'tierion',
-            'TRX': 'tron',
             'VEN': 'vechain',
             'VIB': 'viberate',
             'VIBE': 'vibe',
@@ -323,69 +513,147 @@ export async function GET(request) {
             'WTC': 'waltonchain',
             'XVG': 'verge',
             'XZC': 'zcoin',
-            'YOYO': 'yoyow'
+            'YOYO': 'yoyow',
+            'PEPE': 'pepe',
+            'FLOKI': 'floki',
+            'GALA': 'gala',
+            'CHZ': 'chiliz',
+            'ENA': 'ethena',
+            'GMT': 'stepn',
+            'FET': 'fetch-ai',
+            'POL': 'polygon',
+            'JASMY': 'jasmycoin'
         };
 
-        // Fetch token prices from CoinGecko
+        // Fetch token prices from Bitfinex
+        // Retry logic for Bitfinex API
         const tokenPrices = {};
-        try {
-            const contractAddresses = new Map();
-            if (tokenTxData.status === '1' && Array.isArray(tokenTxData.result)) {
-                tokenTxData.result.forEach(tx => {
-                    const symbol = tx.tokenSymbol || 'UNKNOWN';
-                    if (allSymbols.has(symbol) && tx.contractAddress) {
-                        contractAddresses.set(symbol, tx.contractAddress.toLowerCase());
+        const BITFINEX_MAX_RETRIES = 2;
+        const BITFINEX_RETRY_DELAY = 500;
+        
+        for (let attempt = 1; attempt <= BITFINEX_MAX_RETRIES; attempt++) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
+                const tickersRes = await fetch('https://api-pub.bitfinex.com/v2/tickers?symbols=ALL', {
+                    signal: controller.signal,
+                    cache: 'no-store',
+                    headers: {
+                        'Content-Type': 'application/json',
                     }
                 });
-            }
+                
+                clearTimeout(timeoutId);
 
-            const addressesToFetch = Array.from(contractAddresses.values()).join(',');
-            if (addressesToFetch) {
-                try {
-                    const priceRes = await Promise.race([
-                        fetch(`https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addressesToFetch}&vs_currencies=usd`, {
-                            next: { revalidate: 300 }
-                        }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('CoinGecko fetch timed out')), 10000))
-                    ]);
+                if (!tickersRes.ok) {
+                    const errorText = await tickersRes.text().catch(() => 'Unable to read error response');
+                    console.warn(`Bitfinex API returned status ${tickersRes.status} (attempt ${attempt}/${BITFINEX_MAX_RETRIES}): ${errorText.substring(0, 100)}`);
+                    
+                    // Retry on 5xx errors or rate limit (429)
+                    if ((tickersRes.status >= 500 || tickersRes.status === 429) && attempt < BITFINEX_MAX_RETRIES) {
+                        console.warn(`Retrying Bitfinex API in ${BITFINEX_RETRY_DELAY * attempt}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, BITFINEX_RETRY_DELAY * attempt));
+                        continue;
+                    }
+                    
+                    // If all retries failed, continue without prices
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn('⚠️ Failed to fetch prices from Bitfinex after all retries. Tokens will have price 0.');
+                    }
+                    break;
+                } else {
+                const tickersData = await tickersRes.json();
+                
+                // Ticker format: [SYMBOL, BID, BID_SIZE, ASK, ASK_SIZE, DAILY_CHANGE, DAILY_CHANGE_PERC, LAST_PRICE, VOLUME, HIGH, LOW]
+                // Create a map of Bitfinex symbols to prices
+                const bitfinexPriceMap = new Map();
+                
+                tickersData.forEach(ticker => {
+                    const symbol = ticker[0];
+                    if (symbol.startsWith('t')) {
+                        const lastPrice = ticker[7]; // LAST_PRICE is at index 7
+                        if (lastPrice && lastPrice > 0) {
+                            // Remove 't' prefix and store: tBTCUSD -> BTCUSD
+                            const symbolWithoutPrefix = symbol.substring(1);
+                            bitfinexPriceMap.set(symbolWithoutPrefix, lastPrice);
+                        }
+                    }
+                });
 
-                    if (!priceRes.ok) {
-                        console.warn(`CoinGecko API returned status ${priceRes.status}`);
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`Fetched ${bitfinexPriceMap.size} tickers from Bitfinex`);
+                }
+
+                // Map ERC20 token symbols to Bitfinex symbols
+                // Bitfinex format: SYMBOLUSD (e.g., USDTUSD, PEPEUSD) or SYMBOL:USD (e.g., ETH:USD)
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`Sample Bitfinex symbols:`, Array.from(bitfinexPriceMap.keys()).slice(0, 10).join(', '));
+                    console.log(`Tokens to match:`, Array.from(allSymbols).join(', '));
+                }
+                
+                Array.from(allSymbols).forEach(symbol => {
+                    if (symbol === 'ETH') {
+                        // ETH is special - try ETHUSD first, then ETH:USD
+                        const ethPrice = bitfinexPriceMap.get('ETHUSD') || bitfinexPriceMap.get('ETH:USD');
+                        if (ethPrice) {
+                            tokenPrices['ETH'] = ethPrice;
+                        } else if (process.env.NODE_ENV === 'development') {
+                            console.log(`ETH not found in Bitfinex. Available ETH symbols:`, Array.from(bitfinexPriceMap.keys()).filter(k => k.includes('ETH')).join(', '));
+                        }
                     } else {
-                        const priceData = await priceRes.json();
-                        for (const [symbol, address] of contractAddresses.entries()) {
-                            if (priceData[address]?.usd) {
-                                tokenPrices[symbol] = priceData[address].usd;
+                        // Try direct match: SYMBOLUSD
+                        const directMatch = bitfinexPriceMap.get(`${symbol}USD`);
+                        if (directMatch) {
+                            tokenPrices[symbol] = directMatch;
+                        } else {
+                            // Try with colon: SYMBOL:USD
+                            const colonMatch = bitfinexPriceMap.get(`${symbol}:USD`);
+                            if (colonMatch) {
+                                tokenPrices[symbol] = colonMatch;
+                            } else if (process.env.NODE_ENV === 'development') {
+                                // Debug: show similar symbols
+                                const similar = Array.from(bitfinexPriceMap.keys()).filter(k => k.includes(symbol)).slice(0, 3);
+                                if (similar.length > 0) {
+                                    console.log(`Token ${symbol} not found. Similar symbols:`, similar.join(', '));
+                                }
                             }
                         }
                     }
-                } catch (error) {
-                    if (error.message === 'CoinGecko fetch timed out') {
-                        console.warn('CoinGecko API request timed out after 10 seconds');
-                    } else {
-                        console.warn('Error fetching token prices from CoinGecko:', error.message);
+                });
+
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ Matched ${Object.keys(tokenPrices).length} tokens with Bitfinex prices (attempt ${attempt}):`, Object.keys(tokenPrices).join(', '));
                     }
+                    break; // Success, exit retry loop
                 }
+            } catch (error) {
+                const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                
+                console.error(`Error fetching token prices from Bitfinex (attempt ${attempt}/${BITFINEX_MAX_RETRIES}):`, error.message);
+                
+                if (process.env.NODE_ENV === 'development') {
+                    console.error('Full error:', error);
+                }
+                
+                // Retry on timeout or network errors
+                if ((isTimeout || isNetworkError) && attempt < BITFINEX_MAX_RETRIES) {
+                    console.warn(`Retrying Bitfinex API in ${BITFINEX_RETRY_DELAY * attempt}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                    await new Promise(resolve => setTimeout(resolve, BITFINEX_RETRY_DELAY * attempt));
+                    continue;
+                }
+                
+                // If all retries failed, continue without prices
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('⚠️ Failed to fetch prices from Bitfinex after all retries. Tokens will have price 0.');
+                }
+                break;
             }
-
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`Fetched prices for ${Object.keys(tokenPrices).length} tokens:`, Object.keys(tokenPrices));
-            }
-        } catch (error) {
-            console.error("Error fetching token prices from CoinGecko:", error);
         }
-
-        // Add ETH price
-        try {
-            const ethPriceRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd', {
-                next: { revalidate: 300 }
-            });
-            const ethPriceData = await ethPriceRes.json();
-            if (ethPriceData.ethereum?.usd) {
-                tokenPrices['ETH'] = ethPriceData.ethereum.usd;
-            }
-        } catch (error) {
-            console.error("Error fetching ETH price:", error);
+        
+        if (Object.keys(tokenPrices).length === 0 && allSymbols.size > 0) {
+            console.warn(`⚠️ No token prices fetched from Bitfinex. ${allSymbols.size} tokens will have price 0.`);
         }
 
         // Ensure ETH is in the symbols list if it has volume
@@ -499,13 +767,73 @@ export async function GET(request) {
         );
 
     } catch (error) {
-        console.error("Etherscan API Error:", error);
+        console.error("Critical error in wallet API:", error.message);
+        
+        if (process.env.NODE_ENV === 'development') {
+            console.error('Full error stack:', error.stack);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                cause: error.cause
+            });
+        }
+        
+        // Try to return partial data if we have any tokens processed
+        // This allows the frontend to show something even if there was an error
+        try {
+            // Check if we have any data that was successfully processed before the error
+            const hasAnyData = (typeof tokensIn !== 'undefined' && Object.keys(tokensIn).length > 0) || 
+                              (typeof tokensOut !== 'undefined' && Object.keys(tokensOut).length > 0) ||
+                              (typeof ethInVolume !== 'undefined' && ethInVolume > 0) ||
+                              (typeof ethOutVolume !== 'undefined' && ethOutVolume > 0);
+            
+            if (hasAnyData && typeof allSymbols !== 'undefined' && allSymbols.size > 0) {
+                console.warn('⚠️ Returning partial wallet data due to error');
+                
+                // Build minimal token list from what we have
+                const partialTokens = Array.from(allSymbols).map(symbol => ({
+                    symbol,
+                    name: (typeof tokenNames !== 'undefined' && tokenNames[symbol]) || symbol,
+                    inVolume: (typeof tokensIn !== 'undefined' && tokensIn[symbol]) || 0,
+                    outVolume: (typeof tokensOut !== 'undefined' && tokensOut[symbol]) || 0,
+                    inVolumeUSD: 0, // Prices not available due to error
+                    outVolumeUSD: 0,
+                    price: 0
+                })).filter(t => (t.inVolume > 0 || t.outVolume > 0)).slice(0, 10);
+                
+                return NextResponse.json(
+                    {
+                        address: WALLET_ADDRESS,
+                        pendingTxCount: (typeof pendingTxCount !== 'undefined') ? pendingTxCount : 0,
+                        topTokens: partialTokens,
+                        tokens: partialTokens,
+                        lastUpdate: new Date().toISOString(),
+                        warning: 'Partial data due to processing error',
+                        error: process.env.NODE_ENV === 'development' ? error.message : 'Some data may be incomplete'
+                    },
+                    { 
+                        status: 206, // Partial Content
+                        headers: getRateLimitHeaders(rateLimitResult)
+                    }
+                );
+            }
+        } catch (partialError) {
+            console.error('Error building partial response:', partialError.message);
+        }
+        
         return NextResponse.json(
             { 
                 error: "Failed to fetch wallet data",
-                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+                retryAfter: 60 // Suggest retrying after 60 seconds
             },
-            { status: 500 }
+            { 
+                status: 500,
+                headers: {
+                    ...getRateLimitHeaders(rateLimitResult),
+                    'Retry-After': '60'
+                }
+            }
         );
     }
 }
