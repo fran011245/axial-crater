@@ -41,7 +41,7 @@ export default function TerminalPage() {
             { i: 'liquidity', x: 0, y: 1.5, w: 3, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 3, y: 0, w: 9, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 3.5, w: 3, h: 2.5, minW: 2, minH: 1 },
-            { i: 'funding', x: 0, y: 6.0, w: 3, h: 2, minW: 2, minH: 1.5 },
+            { i: 'funding', x: 0, y: 6.0, w: 3, h: 2, minW: 2, minH: 1.5, static: false },
             { i: 'feed', x: 3, y: 4.1, w: 9, h: 3.9, minW: 4, minH: 1.5 }
         ],
         md: [
@@ -167,9 +167,23 @@ export default function TerminalPage() {
         async function fetchWallet() {
             try {
                 const res = await fetch('/api/wallet');
+                if (!res.ok) {
+                    console.error('Wallet API error:', res.status, res.statusText);
+                    return;
+                }
                 const data = await res.json();
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Wallet data fetched:', { 
+                        hasTopTokens: !!data.topTokens, 
+                        topTokensCount: data.topTokens?.length || 0,
+                        hasTokens: !!data.tokens,
+                        tokensCount: data.tokens?.length || 0
+                    });
+                }
                 setWalletData(data);
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                console.error('Wallet fetch error:', e); 
+            }
         }
         fetchWallet();
         const walletTimer = setInterval(fetchWallet, 30000);
@@ -178,9 +192,18 @@ export default function TerminalPage() {
         async function fetchFunding() {
             try {
                 const res = await fetch('/api/funding');
+                if (!res.ok) {
+                    console.error('Funding API error:', res.status, res.statusText);
+                    return;
+                }
                 const data = await res.json();
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Funding data fetched:', data);
+                }
                 setFundingData(data);
-            } catch (e) { console.error('Funding fetch error:', e); }
+            } catch (e) { 
+                console.error('Funding fetch error:', e); 
+            }
         }
         fetchFunding();
         const fundingTimer = setInterval(fetchFunding, 60000);

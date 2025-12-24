@@ -407,7 +407,8 @@ export async function GET(request) {
             {
                 address: WALLET_ADDRESS,
                 pendingTxCount,
-                tokens: topTokens,
+                topTokens: topTokens, // Changed from 'tokens' to 'topTokens' to match frontend
+                tokens: topTokens, // Keep for backward compatibility
                 lastUpdate: new Date().toISOString(),
             },
             {
