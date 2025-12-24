@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { Search, X, Pin } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, X, Pin, Plus } from 'lucide-react';
 import styles from '../../app/terminal/terminal.module.css';
 
 // Helper function to get Bitfinex trading URL
@@ -221,9 +221,172 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
     );
 };
 
+// Column Suggestion Dialog Component
+const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => {
+    const [columnName, setColumnName] = useState("");
+    const [description, setDescription] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [submitError, setSubmitError] = useState(null);
+
+    useEffect(() => {
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+            document.body.style.overflow = 'hidden';
+        }
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen, onClose]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!columnName.trim()) {
+            return;
+        }
+
+        setIsSubmitting(true);
+        setSubmitError(null);
+        
+        try {
+            const response = await fetch('/api/column-suggestions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    columnName: columnName.trim(),
+                    description: description.trim() || null
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to submit suggestion');
+            }
+
+            // Success
+            setSubmitSuccess(true);
+            setIsSubmitting(false);
+            
+            // Reset form after 2 seconds
+            setTimeout(() => {
+                setColumnName("");
+                setDescription("");
+                setSubmitSuccess(false);
+                setSubmitError(null);
+                onClose();
+            }, 2000);
+        } catch (error) {
+            console.error('Error submitting suggestion:', error);
+            setSubmitError(error.message || 'Failed to submit suggestion. Please try again.');
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClose = () => {
+        if (!isSubmitting) {
+            setColumnName("");
+            setDescription("");
+            setSubmitSuccess(false);
+            onClose();
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <>
+            <div className={styles.suggestionDialogBackdrop} onClick={handleClose} />
+            <div className={styles.suggestionDialog}>
+                <div className={styles.suggestionDialogHeader}>
+                    <span className={styles.suggestionDialogTitle}>SUGGEST A NEW COLUMN / STAT</span>
+                    <button 
+                        className={styles.suggestionDialogCloseButton} 
+                        onClick={handleClose}
+                        disabled={isSubmitting}
+                        aria-label="Close"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+                <form className={styles.suggestionDialogForm} onSubmit={handleSubmit}>
+                    <div className={styles.suggestionDialogField}>
+                        <label className={styles.suggestionDialogLabel}>
+                            COLUMN_NAME / STAT_NAME *
+                        </label>
+                        <input
+                            type="text"
+                            className={styles.suggestionDialogInput}
+                            value={columnName}
+                            onChange={(e) => setColumnName(e.target.value)}
+                            placeholder="E.G., LIQUIDITY_SCORE, MARKET_CAP, ETC."
+                            required
+                            disabled={isSubmitting || submitSuccess}
+                            autoFocus
+                        />
+                    </div>
+                    <div className={styles.suggestionDialogField}>
+                        <label className={styles.suggestionDialogLabel}>
+                            DESCRIPTION / USE_CASE
+                        </label>
+                        <textarea
+                            className={styles.suggestionDialogTextarea}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="DESCRIBE WHAT THIS COLUMN WOULD SHOW AND WHY IT WOULD BE USEFUL..."
+                            rows={6}
+                            disabled={isSubmitting || submitSuccess}
+                        />
+                    </div>
+                    {submitError && (
+                        <div className={styles.suggestionDialogError}>
+                            ERROR: {submitError}
+                        </div>
+                    )}
+                    {submitSuccess ? (
+                        <div className={styles.suggestionDialogSuccess}>
+                            ✓ SUGGESTION SUBMITTED SUCCESSFULLY
+                        </div>
+                    ) : (
+                        <div className={styles.suggestionDialogActions}>
+                            <button
+                                type="button"
+                                className={styles.suggestionDialogButton}
+                                onClick={handleClose}
+                                disabled={isSubmitting}
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="submit"
+                                className={`${styles.suggestionDialogButton} ${styles.suggestionDialogButtonPrimary}`}
+                                disabled={isSubmitting || !columnName.trim()}
+                            >
+                                {isSubmitting ? 'SUBMITTING...' : 'SUBMIT'}
+                            </button>
+                        </div>
+                    )}
+                </form>
+            </div>
+        </>
+    );
+};
+
 export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
     const [sortBySymbol, setSortBySymbol] = useState(null);
     const [sortByLast, setSortByLast] = useState(null);
     const [sortBySD, setSortBySD] = useState(null);
@@ -236,7 +399,9 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
 
     const getMovementStatus = (pairSymbol) => {
         const base = pairSymbol.replace('USD', '').replace('UST', '');
-        const mv = movements.find(m => m.symbol === base || m.name === base);
+        // Ensure movements is an array before using .find()
+        const movementsArray = Array.isArray(movements) ? movements : [];
+        const mv = movementsArray.find(m => m.symbol === base || m.name === base);
         return {
             d: mv ? (mv.deposit === 'Active' ? 'OK' : 'CLSD') : 'NA',
             w: mv ? (mv.withdrawal === 'Active' ? 'OK' : 'CLSD') : 'NA'
@@ -444,6 +609,16 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                     W
                     {sortByW && <span className={styles.sortArrow}>{sortByW === 'desc' ? '↓' : '↑'}</span>}
                 </span>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                        className={styles.suggestionButton}
+                        onClick={() => setIsSuggestionDialogOpen(true)}
+                        title="Suggest a new column"
+                        aria-label="Suggest a new column"
+                    >
+                        <Plus size={14} />
+                    </button>
+                </span>
             </div>
             <div className={styles.scrollList} style={{ flex: 1, overflow: 'auto' }}>
                 {sortedPairs.length > 0 ? (
@@ -482,6 +657,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                                     st.w === 'CLSD' ? styles.statusErr : 
                                     styles.statusNa
                                 }>{st.w}</span>
+                                <span></span>
                             </div>
                         );
                     })
@@ -491,6 +667,11 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                     </div>
                 )}
             </div>
+            <ColumnSuggestionDialog 
+                isOpen={isSuggestionDialogOpen} 
+                onClose={() => setIsSuggestionDialogOpen(false)}
+                isClassicTheme={isClassicTheme}
+            />
         </section>
     );
 };
