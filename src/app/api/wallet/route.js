@@ -228,6 +228,14 @@ export async function GET(request) {
         // Collect all unique token symbols
         const allSymbols = new Set([...Object.keys(tokensIn), ...Object.keys(tokensOut)]);
         
+        if (process.env.NODE_ENV === 'development') {
+            console.log('Tokens IN keys:', Object.keys(tokensIn));
+            console.log('Tokens OUT keys:', Object.keys(tokensOut));
+            console.log('All symbols collected:', Array.from(allSymbols));
+            console.log('Tokens IN volumes:', Object.entries(tokensIn).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
+            console.log('Tokens OUT volumes:', Object.entries(tokensOut).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
+        }
+        
         // Mapping for common tokens to CoinGecko IDs
         const symbolToCoinGeckoId = {
             'USDT': 'tether',
@@ -416,29 +424,37 @@ export async function GET(request) {
             return tokenData;
         });
 
+        // Filter out tokens with zero volume first
+        const tokensWithVolume = tokens.filter(token => {
+            const totalVolume = (token.inVolume || 0) + (token.outVolume || 0);
+            return totalVolume > 0;
+        });
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`Tokens with volume: ${tokensWithVolume.length} out of ${tokens.length} total`);
+        }
+
         // Sort by total volume (IN + OUT) descending, but prioritize ETH if it has volume
-        const topTokens = tokens.sort((a, b) => {
+        const topTokens = tokensWithVolume.sort((a, b) => {
             // Always put ETH first if it has volume
             const ethTotalVolume = (ethInVolume + ethOutVolume);
             if (a.symbol === 'ETH' && ethTotalVolume > 0) return -1;
             if (b.symbol === 'ETH' && ethTotalVolume > 0) return 1;
             
+            // Sort by USD volume if available, otherwise by raw volume
+            const aTotalVolumeUSD = (a.inVolumeUSD || 0) + (a.outVolumeUSD || 0);
+            const bTotalVolumeUSD = (b.inVolumeUSD || 0) + (b.outVolumeUSD || 0);
+            
+            if (aTotalVolumeUSD > 0 || bTotalVolumeUSD > 0) {
+                return bTotalVolumeUSD - aTotalVolumeUSD;
+            }
+            
+            // Fallback to raw volume
             const aTotalVolume = (a.outVolume || 0) + (a.inVolume || 0);
             const bTotalVolume = (b.outVolume || 0) + (b.inVolume || 0);
             
-            // Sort by total volume descending
             return bTotalVolume - aTotalVolume;
-        }).filter((token, index, array) => {
-            // Always include ETH if it has volume
-            const tokenTotalVolume = (token.outVolume || 0) + (token.inVolume || 0);
-            if (token.symbol === 'ETH' && tokenTotalVolume > 0) {
-                return true; // Always include ETH
-            }
-            // For other tokens, include top 10 (but reserve 1 slot for ETH if needed)
-            const ethIncluded = array.some(t => t.symbol === 'ETH' && ((t.outVolume || 0) + (t.inVolume || 0) > 0));
-            const availableSlots = ethIncluded ? 9 : 10;
-            return index < availableSlots;
-        });
+        }).slice(0, 10); // Take top 10 tokens (ETH will be first if it has volume)
         
         // Log final tokens for debugging
         if (process.env.NODE_ENV === 'development') {
