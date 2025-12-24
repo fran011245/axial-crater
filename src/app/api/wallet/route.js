@@ -34,7 +34,19 @@ export async function GET(request) {
                 `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
                 { next: { revalidate: 300 } }
             );
-            tokenTxData = await tokenTxRes.json();
+            
+            if (!tokenTxRes.ok) {
+                console.error(`Etherscan token API HTTP error: ${tokenTxRes.status} ${tokenTxRes.statusText}`);
+            }
+            
+            const contentType = tokenTxRes.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                tokenTxData = await tokenTxRes.json();
+            } else {
+                const text = await tokenTxRes.text();
+                console.error('Etherscan token API returned non-JSON:', text.substring(0, 200));
+                tokenTxData = { status: '0', result: [], message: 'Invalid response format' };
+            }
             
             // Validate Etherscan response
             if (tokenTxData.status === '0') {
@@ -47,6 +59,13 @@ export async function GET(request) {
                         tokenTxData = { status: '0', result: [], message: 'No API key' };
                     } else if (tokenTxData.message !== 'No transactions found') {
                         console.warn('Etherscan token API error:', tokenTxData.message, tokenTxData.result);
+                    }
+                }
+            } else if (tokenTxData.status === '1') {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`✅ Token transfers fetched successfully: ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
+                    if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
+                        console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
                     }
                 }
             }
@@ -116,11 +135,27 @@ export async function GET(request) {
         const tokenDecimals = {};
         const tokenNames = {};
 
+        if (process.env.NODE_ENV === 'development') {
+            console.log('Token transfer data status:', tokenTxData.status);
+            console.log('Token transfer result type:', Array.isArray(tokenTxData.result) ? 'array' : typeof tokenTxData.result);
+            console.log('Token transfer result length:', Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A');
+            if (tokenTxData.status === '0') {
+                console.log('Token transfer error:', tokenTxData.message, tokenTxData.result);
+            }
+        }
+
         if (tokenTxData.status === '1' && Array.isArray(tokenTxData.result)) {
+            let processedCount = 0;
+            let filteredCount = 0;
+            
             tokenTxData.result.forEach(tx => {
                 const txTime = parseInt(tx.timeStamp);
-                if (txTime < oneDayAgo) return;
+                if (txTime < oneDayAgo) {
+                    filteredCount++;
+                    return;
+                }
 
+                processedCount++;
                 const symbol = tx.tokenSymbol || 'UNKNOWN';
                 const decimals = parseInt(tx.tokenDecimal) || 18;
                 const value = parseFloat(tx.value) / Math.pow(10, decimals);
@@ -134,6 +169,18 @@ export async function GET(request) {
                     tokensOut[symbol] = (tokensOut[symbol] || 0) + value;
                 }
             });
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`ERC-20 Tokens processed: ${processedCount} in last 24h, ${filteredCount} filtered (older than 24h)`);
+                console.log(`ERC-20 Tokens found:`, Object.keys(tokensIn).concat(Object.keys(tokensOut)).filter((v, i, a) => a.indexOf(v) === i));
+                console.log(`ERC-20 Tokens IN:`, Object.keys(tokensIn).length, 'symbols');
+                console.log(`ERC-20 Tokens OUT:`, Object.keys(tokensOut).length, 'symbols');
+            }
+        } else {
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('⚠️ Token transfer data not available or invalid format');
+                console.warn('Status:', tokenTxData.status, 'Message:', tokenTxData.message);
+            }
         }
 
         // Process ETH transactions
@@ -180,7 +227,7 @@ export async function GET(request) {
 
         // Collect all unique token symbols
         const allSymbols = new Set([...Object.keys(tokensIn), ...Object.keys(tokensOut)]);
-
+        
         // Mapping for common tokens to CoinGecko IDs
         const symbolToCoinGeckoId = {
             'USDT': 'tether',
@@ -351,8 +398,8 @@ export async function GET(request) {
             const inVolume = tokensIn[symbol] || 0;
             const outVolume = tokensOut[symbol] || 0;
             const price = tokenPrices[symbol] || 0;
-
-            return {
+            
+            const tokenData = {
                 symbol,
                 name: tokenNames[symbol] || symbol,
                 inVolume,
@@ -361,6 +408,12 @@ export async function GET(request) {
                 outVolumeUSD: price > 0 ? outVolume * price : 0,
                 price,
             };
+            
+            if (process.env.NODE_ENV === 'development' && (inVolume > 0 || outVolume > 0)) {
+                console.log(`Token ${symbol}: IN=${inVolume}, OUT=${outVolume}, Price=${price}, IN_USD=${tokenData.inVolumeUSD}, OUT_USD=${tokenData.outVolumeUSD}`);
+            }
+            
+            return tokenData;
         });
 
         // Sort by total volume (IN + OUT) descending, but prioritize ETH if it has volume
@@ -389,10 +442,13 @@ export async function GET(request) {
         
         // Log final tokens for debugging
         if (process.env.NODE_ENV === 'development') {
-            console.log(`Final tokens in response (${topTokens.length}):`, topTokens.map(t => `${t.symbol}(IN:${t.inVolume},OUT:${t.outVolume})`).join(', '));
+            console.log(`\n=== FINAL TOKEN SUMMARY ===`);
+            console.log(`Total tokens in response: ${topTokens.length}`);
+            console.log(`Tokens:`, topTokens.map(t => `${t.symbol}(IN:${t.inVolume.toFixed(2)},OUT:${t.outVolume.toFixed(2)},IN_USD:${t.inVolumeUSD.toFixed(2)},OUT_USD:${t.outVolumeUSD.toFixed(2)})`).join(', '));
+            
             const ethToken = topTokens.find(t => t.symbol === 'ETH');
             if (ethToken) {
-                console.log(`✅ ETH found in response - IN: ${ethToken.inVolume}, OUT: ${ethToken.outVolume}, IN_USD: ${ethToken.inVolumeUSD}, OUT_USD: ${ethToken.outVolumeUSD}`);
+                console.log(`✅ ETH found - IN: ${ethToken.inVolume}, OUT: ${ethToken.outVolume}, IN_USD: ${ethToken.inVolumeUSD}, OUT_USD: ${ethToken.outVolumeUSD}`);
             } else {
                 console.log('❌ ETH NOT found in final response');
                 if (ethInVolume > 0 || ethOutVolume > 0) {
@@ -401,6 +457,16 @@ export async function GET(request) {
                     console.log('ℹ️ ETH has no volume in last 24h, so it was correctly excluded');
                 }
             }
+            
+            const erc20Tokens = topTokens.filter(t => t.symbol !== 'ETH');
+            console.log(`ERC-20 tokens found: ${erc20Tokens.length}`);
+            if (erc20Tokens.length === 0) {
+                console.warn('⚠️ No ERC-20 tokens in final response!');
+                console.log('All symbols collected:', Array.from(allSymbols));
+                console.log('Tokens IN keys:', Object.keys(tokensIn));
+                console.log('Tokens OUT keys:', Object.keys(tokensOut));
+            }
+            console.log(`========================\n`);
         }
 
         return NextResponse.json(
