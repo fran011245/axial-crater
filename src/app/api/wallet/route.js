@@ -27,36 +27,85 @@ export async function GET(request) {
         const now = Math.floor(Date.now() / 1000);
         const oneDayAgo = now - 86400;
 
-        // Fetch ERC-20 token transfers
-        const tokenTxRes = await fetch(
-            `https://api.etherscan.io/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-            { next: { revalidate: 300 } }
-        );
-        const tokenTxData = await tokenTxRes.json();
-        
-        // Validate Etherscan response
-        if (tokenTxData.status === '0' && tokenTxData.message !== 'No transactions found') {
-            console.warn('Etherscan token API error:', tokenTxData.message);
+        // Fetch ERC-20 token transfers (using V2 API with chainid=1 for Ethereum mainnet)
+        let tokenTxData = { status: '0', result: [] };
+        try {
+            const tokenTxRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                { next: { revalidate: 300 } }
+            );
+            tokenTxData = await tokenTxRes.json();
+            
+            // Validate Etherscan response
+            if (tokenTxData.status === '0') {
+                if (tokenTxData.message === 'NOTOK') {
+                    if (tokenTxData.result?.includes('deprecated')) {
+                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+                    } else if (tokenTxData.result?.includes('Missing/Invalid API Key')) {
+                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                        // Return empty result instead of crashing
+                        tokenTxData = { status: '0', result: [], message: 'No API key' };
+                    } else if (tokenTxData.message !== 'No transactions found') {
+                        console.warn('Etherscan token API error:', tokenTxData.message, tokenTxData.result);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching token transfers:', error.message);
+            tokenTxData = { status: '0', result: [] };
         }
 
-        // Fetch normal ETH transactions
-        const ethTxRes = await fetch(
-            `https://api.etherscan.io/api?module=account&action=txlist&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-            { next: { revalidate: 300 } }
-        );
-        const ethTxData = await ethTxRes.json();
-        
-        // Validate Etherscan response
-        if (ethTxData.status === '0' && ethTxData.message !== 'No transactions found') {
-            console.warn('Etherscan ETH API error:', ethTxData.message);
+        // Fetch normal ETH transactions (using V2 API with chainid=1 for Ethereum mainnet)
+        let ethTxData = { status: '0', result: [] };
+        try {
+            const ethTxRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                { next: { revalidate: 300 } }
+            );
+            ethTxData = await ethTxRes.json();
+            
+            // Validate Etherscan response
+            if (ethTxData.status === '0') {
+                if (ethTxData.message === 'NOTOK') {
+                    if (ethTxData.result?.includes('deprecated')) {
+                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+                    } else if (ethTxData.result?.includes('Missing/Invalid API Key')) {
+                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                        // Return empty result instead of crashing
+                        ethTxData = { status: '0', result: [], message: 'No API key' };
+                    } else if (ethTxData.message !== 'No transactions found') {
+                        console.warn('Etherscan ETH API error:', ethTxData.message, ethTxData.result);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching ETH transactions:', error.message);
+            ethTxData = { status: '0', result: [] };
         }
 
-        // Get pending transactions count
-        const pendingRes = await fetch(
-            `https://api.etherscan.io/api?module=account&action=txlist&address=${WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
-            { next: { revalidate: 60 } }
-        );
-        const pendingData = await pendingRes.json();
+        // Get pending transactions count (using V2 API with chainid=1 for Ethereum mainnet)
+        let pendingData = { status: '0', result: [] };
+        try {
+            const pendingRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+                { next: { revalidate: 60 } }
+            );
+            pendingData = await pendingRes.json();
+            
+            // Validate response before processing
+            if (pendingData.status === '0' && pendingData.message === 'NOTOK') {
+                if (pendingData.result?.includes('Missing/Invalid API Key')) {
+                    console.warn('⚠️ Etherscan API key invalid for pending transactions check.');
+                    pendingData = { status: '0', result: [] };
+                } else {
+                    console.warn('Etherscan pending API error:', pendingData.message, pendingData.result);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching pending transactions:', error.message);
+            pendingData = { status: '0', result: [] };
+        }
+        
         const pendingTxCount = (Array.isArray(pendingData.result) 
             ? pendingData.result.filter(tx => !tx.blockNumber || tx.blockNumber === '0').length 
             : 0);
