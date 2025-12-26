@@ -1,5 +1,24 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```bash
+# Etherscan API Key (required for wallet data)
+ETHERSCAN_API_KEY=your_etherscan_api_key
+
+# CoinMarketCap API Key (optional, falls back to CoinGecko if not set)
+# Get your free API key at: https://coinmarketcap.com/api/
+COINMARKETCAP_API_KEY=your_coinmarketcap_api_key
+
+# Supabase (for column suggestions and data storage)
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+**Note**: If `COINMARKETCAP_API_KEY` is not set, the application will automatically use CoinGecko as a fallback (no API key required, but limited token support).
+
 ## Getting Started
 
 First, run the development server:

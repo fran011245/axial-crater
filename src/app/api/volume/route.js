@@ -105,71 +105,194 @@ export async function GET(request) {
 
         // Fetch 30-day candles for top pairs to calculate 7D and 30D volume
         // Limit to 30 candles (1D timeframe)
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[7D/30D Volume] Processing ${topPairs.length} top pairs`);
+        }
+        
         await Promise.all(topPairs.map(async (pair) => {
             try {
                 // Ensure symbol has 't' prefix for API call
-                const apiSymbol = pair.symbol.startsWith('t') ? pair.symbol : `t${pair.symbol}`;
+                // Handle symbols with ':' format (e.g., "BTC:USD" -> "tBTC:USD")
+                let apiSymbol = pair.symbol;
+                if (!apiSymbol.startsWith('t')) {
+                    // If has ':', maintain the format (e.g., "BTC:USD" -> "tBTC:USD")
+                    if (apiSymbol.includes(':')) {
+                        apiSymbol = `t${apiSymbol}`;
+                    } else {
+                        apiSymbol = `t${apiSymbol}`;
+                    }
+                }
+                
                 // Candle response: [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME]
                 const candleRes = await fetch(`https://api-pub.bitfinex.com/v2/candles/trade:1D:${apiSymbol}/hist?limit=30`, {
-                    next: { revalidate: 3600 } // Cache historical for 1 hour
+                    next: { revalidate: 1800 } // Cache historical for 30 minutes (reduced from 1 hour)
                 });
-                const candles = await candleRes.json();
-
-                if (Array.isArray(candles) && candles.length > 0) {
-                    // Sum volumes. Index 5 is VOLUME, Index 2 is CLOSE price.
-                    // Note: Candles are reversed (newest first)
-                    // 7D sum: volume * close price (approximate USD volume)
-                    const vol7d = candles.slice(0, 7).reduce((acc, c) => {
-                        const volume = c[5] || 0;
-                        const closePrice = c[2] || 0;
-                        return acc + (volume * closePrice);
-                    }, 0);
-
-                    // 30D sum
-                    const vol30d = candles.slice(0, 30).reduce((acc, c) => {
-                        const volume = c[5] || 0;
-                        const closePrice = c[2] || 0;
-                        return acc + (volume * closePrice);
-                    }, 0);
-
-                    pair.vol7d = vol7d;
-                    pair.vol30d = vol30d;
-                } else {
+                
+                if (!candleRes.ok) {
+                    const errorText = await candleRes.text().catch(() => '');
+                    console.error(`[7D/30D Volume] API error for ${pair.symbol} (${apiSymbol}): ${candleRes.status} - ${errorText.substring(0, 100)}`);
                     pair.vol7d = 0;
                     pair.vol30d = 0;
+                    return;
+                }
+                
+                const candles = await candleRes.json();
+
+                // Validate response format
+                if (!Array.isArray(candles)) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] Invalid response for ${pair.symbol}: not an array`, candles);
+                    }
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                if (candles.length === 0) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] No candles returned for ${pair.symbol}`);
+                    }
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                // Validate candle format: each candle should be an array with at least 6 elements
+                const isValidCandle = candles.every(c => Array.isArray(c) && c.length >= 6);
+                if (!isValidCandle) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] Invalid candle format for ${pair.symbol}`, candles[0]);
+                    }
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                // Sum volumes. Index 5 is VOLUME, Index 2 is CLOSE price.
+                // Note: Candles are reversed (newest first)
+                // 7D sum: volume * close price (approximate USD volume)
+                const vol7d = candles.slice(0, 7).reduce((acc, c) => {
+                    const volume = c[5] || 0;
+                    const closePrice = c[2] || 0;
+                    return acc + (volume * closePrice);
+                }, 0);
+
+                // 30D sum
+                const vol30d = candles.slice(0, 30).reduce((acc, c) => {
+                    const volume = c[5] || 0;
+                    const closePrice = c[2] || 0;
+                    return acc + (volume * closePrice);
+                }, 0);
+
+                pair.vol7d = vol7d;
+                pair.vol30d = vol30d;
+                
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[7D/30D Volume] ${pair.symbol}: 7D=${vol7d.toFixed(2)}, 30D=${vol30d.toFixed(2)}`);
                 }
             } catch (e) {
-                console.error(`Failed to fetch candles for ${pair.symbol}`, e);
+                console.error(`[7D/30D Volume] Failed to fetch candles for ${pair.symbol}:`, {
+                    message: e.message,
+                    stack: process.env.NODE_ENV === 'development' ? e.stack : undefined,
+                    symbol: pair.symbol
+                });
                 pair.vol7d = 0;
                 pair.vol30d = 0;
             }
         }));
 
-        // Fetch 7-day candles for low pairs to calculate 7D volume
+        // Fetch 30-day candles for low pairs to calculate 7D and 30D volume
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`[7D/30D Volume] Processing ${lowPairs.length} low pairs`);
+        }
+        
         await Promise.all(lowPairs.map(async (pair) => {
             try {
                 // Ensure symbol has 't' prefix for API call
-                const apiSymbol = pair.symbol.startsWith('t') ? pair.symbol : `t${pair.symbol}`;
+                // Handle symbols with ':' format (e.g., "BTC:USD" -> "tBTC:USD")
+                let apiSymbol = pair.symbol;
+                if (!apiSymbol.startsWith('t')) {
+                    // If has ':', maintain the format (e.g., "BTC:USD" -> "tBTC:USD")
+                    if (apiSymbol.includes(':')) {
+                        apiSymbol = `t${apiSymbol}`;
+                    } else {
+                        apiSymbol = `t${apiSymbol}`;
+                    }
+                }
+                
                 const candleRes = await fetch(`https://api-pub.bitfinex.com/v2/candles/trade:1D:${apiSymbol}/hist?limit=30`, {
-                    next: { revalidate: 3600 }
+                    next: { revalidate: 1800 } // Cache historical for 30 minutes (reduced from 1 hour)
                 });
+                
+                if (!candleRes.ok) {
+                    const errorText = await candleRes.text().catch(() => '');
+                    console.error(`[7D/30D Volume] API error for ${pair.symbol} (${apiSymbol}): ${candleRes.status} - ${errorText.substring(0, 100)}`);
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+                
                 const candles = await candleRes.json();
 
-                if (Array.isArray(candles) && candles.length > 0) {
-                    // Sum volumes: c[5] = VOLUME, c[2] = CLOSE price
-                    // Calculate USD volume: volume * close price
-                    const vol7d = candles.slice(0, 7).reduce((acc, c) => {
-                        const volume = c[5] || 0;
-                        const closePrice = c[2] || 0;
-                        return acc + (volume * closePrice);
-                    }, 0);
-                    pair.vol7d = vol7d;
-                } else {
+                // Validate response format
+                if (!Array.isArray(candles)) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] Invalid response for ${pair.symbol}: not an array`, candles);
+                    }
                     pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                if (candles.length === 0) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] No candles returned for ${pair.symbol}`);
+                    }
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                // Validate candle format: each candle should be an array with at least 6 elements
+                const isValidCandle = candles.every(c => Array.isArray(c) && c.length >= 6);
+                if (!isValidCandle) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`[7D/30D Volume] Invalid candle format for ${pair.symbol}`, candles[0]);
+                    }
+                    pair.vol7d = 0;
+                    pair.vol30d = 0;
+                    return;
+                }
+
+                // Sum volumes: c[5] = VOLUME, c[2] = CLOSE price
+                // Calculate USD volume: volume * close price
+                const vol7d = candles.slice(0, 7).reduce((acc, c) => {
+                    const volume = c[5] || 0;
+                    const closePrice = c[2] || 0;
+                    return acc + (volume * closePrice);
+                }, 0);
+                
+                // 30D sum
+                const vol30d = candles.slice(0, 30).reduce((acc, c) => {
+                    const volume = c[5] || 0;
+                    const closePrice = c[2] || 0;
+                    return acc + (volume * closePrice);
+                }, 0);
+                
+                pair.vol7d = vol7d;
+                pair.vol30d = vol30d;
+                
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[7D/30D Volume] ${pair.symbol}: 7D=${vol7d.toFixed(2)}, 30D=${vol30d.toFixed(2)}`);
                 }
             } catch (e) {
-                console.error(`Failed to fetch candles for ${pair.symbol}`, e);
+                console.error(`[7D/30D Volume] Failed to fetch candles for ${pair.symbol}:`, {
+                    message: e.message,
+                    stack: process.env.NODE_ENV === 'development' ? e.stack : undefined,
+                    symbol: pair.symbol
+                });
                 pair.vol7d = 0;
+                pair.vol30d = 0;
             }
         }));
 

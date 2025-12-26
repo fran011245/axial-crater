@@ -396,6 +396,19 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
     const [sortBy30DVol, setSortBy30DVol] = useState(null);
     const [sortByD, setSortByD] = useState(null);
     const [sortByW, setSortByW] = useState(null);
+    
+    // Advanced filters
+    const [showFilters, setShowFilters] = useState(false);
+    const [minVolume, setMinVolume] = useState("");
+    const [maxVolume, setMaxVolume] = useState("");
+    const [minSpread, setMinSpread] = useState("");
+    const [maxSpread, setMaxSpread] = useState("");
+    const [minChange, setMinChange] = useState("");
+    const [maxChange, setMaxChange] = useState("");
+    
+    // Trend data
+    const [trends, setTrends] = useState(new Map());
+    const [loadingTrends, setLoadingTrends] = useState(false);
 
     const getMovementStatus = (pairSymbol) => {
         const base = pairSymbol.replace('USD', '').replace('UST', '');
@@ -409,11 +422,41 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
     };
 
     const fmtVals = (val) => {
-        if (!val) return '---';
+        // Distinguish between 0 (valid value) and null/undefined (no data)
+        if (val === null || val === undefined) return '---';
+        if (val === 0) return '0';
         if (val > 1000000000) return (val / 1000000000).toFixed(1) + 'B';
         if (val > 1000000) return (val / 1000000).toFixed(1) + 'M';
         return Math.floor(val).toLocaleString();
     }
+
+    // Fetch trend data
+    useEffect(() => {
+        if (!volume?.topPairs || volume.topPairs.length === 0) return;
+        
+        setLoadingTrends(true);
+        const fetchTrends = async () => {
+            try {
+                const response = await fetch('/api/insights/volume-trends?hours=24&limit=50');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        const trendsMap = new Map();
+                        data.data.forEach(trend => {
+                            trendsMap.set(trend.symbol, trend);
+                        });
+                        setTrends(trendsMap);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching trends:', error);
+            } finally {
+                setLoadingTrends(false);
+            }
+        };
+        
+        fetchTrends();
+    }, [volume?.topPairs]);
 
     const handleSort = (column) => {
         // Reset all other sorts
@@ -467,12 +510,47 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         }
     };
 
-    // Filter pairs based on search query, limit to 12 when not searching
-    const filteredPairs = volume?.topPairs
-        ? volume.topPairs
-            .filter(p => !searchQuery || p.symbol.includes(searchQuery.toUpperCase()))
-            .slice(0, searchQuery ? undefined : 12)
-        : [];
+    // Filter pairs based on search query and advanced filters, limit to 12 when not searching/filtering
+    const filteredPairs = useMemo(() => {
+        if (!volume?.topPairs) return [];
+        
+        let filtered = volume.topPairs.filter(p => {
+            // Search filter
+            if (searchQuery && !p.symbol.includes(searchQuery.toUpperCase())) {
+                return false;
+            }
+            
+            // Volume filters
+            if (minVolume && (p.volumeUSD || 0) < parseFloat(minVolume)) {
+                return false;
+            }
+            if (maxVolume && (p.volumeUSD || 0) > parseFloat(maxVolume)) {
+                return false;
+            }
+            
+            // Spread filters
+            if (minSpread && (p.spreadPercent || 0) < parseFloat(minSpread)) {
+                return false;
+            }
+            if (maxSpread && (p.spreadPercent || 0) > parseFloat(maxSpread)) {
+                return false;
+            }
+            
+            // Change percentage filters
+            if (minChange && (p.change || 0) < parseFloat(minChange) / 100) {
+                return false;
+            }
+            if (maxChange && (p.change || 0) > parseFloat(maxChange) / 100) {
+                return false;
+            }
+            
+            return true;
+        });
+        
+        // Limit to 12 when not searching or filtering
+        const hasFilters = searchQuery || minVolume || maxVolume || minSpread || maxSpread || minChange || maxChange;
+        return hasFilters ? filtered : filtered.slice(0, 12);
+    }, [volume?.topPairs, searchQuery, minVolume, maxVolume, minSpread, maxSpread, minChange, maxChange]);
 
     const sortedPairs = useMemo(() => {
         let sorted = [...filteredPairs];
@@ -537,6 +615,19 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         
         return sorted;
     }, [filteredPairs, sortBySymbol, sortByLast, sortBySD, sortBySpread, sortBy24HVol, sortBy7DVol, sortBy30DVol, sortByD, sortByW, movements]);
+    
+    // Helper to get trend indicator
+    const getTrendIndicator = (symbol) => {
+        const trend = trends.get(symbol);
+        if (!trend) return null;
+        
+        if (trend.trend_direction === 'up') {
+            return <span style={{ color: isClassicTheme ? '#00ff00' : '#3fb950', marginLeft: '4px' }}>↑</span>;
+        } else if (trend.trend_direction === 'down') {
+            return <span style={{ color: isClassicTheme ? '#ff3333' : '#f85149', marginLeft: '4px' }}>↓</span>;
+        }
+        return null;
+    };
 
     return (
         <section className={styles.sectorB} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -564,14 +655,154 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                 ) : (
                     <>
                         <span className={styles.warningTitle}>{">> MARKET_SCANNERS"}</span>
-                        <Search
-                            size={14}
-                            className={styles.iconBtn}
-                            onClick={() => setIsSearchOpen(true)}
-                        />
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <button
+                                className={styles.iconBtn}
+                                onClick={() => setShowFilters(!showFilters)}
+                                style={{ 
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                    background: showFilters ? (isClassicTheme ? '#331a00' : '#21262d') : 'transparent'
+                                }}
+                                title="Advanced filters"
+                            >
+                                FILTER
+                            </button>
+                            <Search
+                                size={14}
+                                className={styles.iconBtn}
+                                onClick={() => setIsSearchOpen(true)}
+                            />
+                        </div>
                     </>
                 )}
             </div>
+            {showFilters && (
+                <div style={{ 
+                    padding: '8px',
+                    borderBottom: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    fontSize: '11px',
+                    background: isClassicTheme ? '#110a00' : '#0d1117'
+                }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <label style={{ color: isClassicTheme ? '#ff9900' : '#8b949e' }}>VOL:</label>
+                        <input
+                            type="number"
+                            placeholder="Min"
+                            value={minVolume}
+                            onChange={(e) => setMinVolume(e.target.value)}
+                            style={{
+                                width: '80px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                        <input
+                            type="number"
+                            placeholder="Max"
+                            value={maxVolume}
+                            onChange={(e) => setMaxVolume(e.target.value)}
+                            style={{
+                                width: '80px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <label style={{ color: isClassicTheme ? '#ff9900' : '#8b949e' }}>SPREAD:</label>
+                        <input
+                            type="number"
+                            placeholder="Min %"
+                            value={minSpread}
+                            onChange={(e) => setMinSpread(e.target.value)}
+                            style={{
+                                width: '60px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                        <input
+                            type="number"
+                            placeholder="Max %"
+                            value={maxSpread}
+                            onChange={(e) => setMaxSpread(e.target.value)}
+                            style={{
+                                width: '60px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <label style={{ color: isClassicTheme ? '#ff9900' : '#8b949e' }}>CHANGE:</label>
+                        <input
+                            type="number"
+                            placeholder="Min %"
+                            value={minChange}
+                            onChange={(e) => setMinChange(e.target.value)}
+                            style={{
+                                width: '60px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                        <input
+                            type="number"
+                            placeholder="Max %"
+                            value={maxChange}
+                            onChange={(e) => setMaxChange(e.target.value)}
+                            style={{
+                                width: '60px',
+                                padding: '2px 4px',
+                                background: isClassicTheme ? '#000' : '#161b22',
+                                border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                                color: isClassicTheme ? '#ff9900' : '#e6edf3',
+                                fontSize: '10px'
+                            }}
+                        />
+                    </div>
+                    <button
+                        onClick={() => {
+                            setMinVolume("");
+                            setMaxVolume("");
+                            setMinSpread("");
+                            setMaxSpread("");
+                            setMinChange("");
+                            setMaxChange("");
+                        }}
+                        style={{
+                            padding: '2px 8px',
+                            background: isClassicTheme ? '#331a00' : '#21262d',
+                            border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}`,
+                            color: isClassicTheme ? '#ff9900' : '#8b949e',
+                            fontSize: '10px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        CLEAR
+                    </button>
+                </div>
+            )}
             <div className={styles.tableHeader}>
                 <span className={styles.tableHeaderSortable} onClick={() => handleSort('symbol')}>
                     SYMBOL
@@ -633,9 +864,10 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                                         '_blank', 
                                         'noopener,noreferrer'
                                     )}
-                                    style={{ cursor: 'pointer' }}
+                                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                                 >
                                     {p.symbol}
+                                    {getTrendIndicator(p.symbol)}
                                 </span>
                                 <span className={styles.colPrice}>{p.lastPrice.toFixed(2)}</span>
                                 <span className={p.change >= 0 ? styles.gain : styles.loss}>
@@ -704,10 +936,25 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
 
     const sortedTokens = useMemo(() => {
         if (!walletData?.topTokens || walletData.topTokens.length === 0) {
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('WalletMonitor: No topTokens in walletData', walletData);
+            }
             return [];
         }
 
-        const tokens = [...walletData.topTokens];
+        // Validate token structure and filter invalid entries
+        const tokens = walletData.topTokens.filter(t => {
+            const isValid = t && t.symbol && (
+                (t.inVolume !== undefined && t.inVolume !== null) ||
+                (t.outVolume !== undefined && t.outVolume !== null)
+            );
+            
+            if (!isValid && process.env.NODE_ENV === 'development') {
+                console.warn('WalletMonitor: Invalid token structure:', t);
+            }
+            
+            return isValid;
+        });
         
         // Separar ETH si tiene volumen
         const ethToken = tokens.find(t => t.symbol === 'ETH' && ((t.outVolume || 0) + (t.inVolume || 0) > 0));
@@ -779,16 +1026,35 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                 <div className={styles.walletList}>
                     {sortedTokens.length > 0 ? (
                         sortedTokens.map(t => {
-                            // Format volumes: show USD if available, otherwise raw token amount
+                            // Format volumes: show USD if available and > 0, otherwise raw token amount
                             const formatVolume = (volume, usdVolume) => {
-                                if (usdVolume !== null && usdVolume !== undefined) {
+                                // If we have USD volume and it's greater than 0, show it
+                                if (usdVolume !== null && usdVolume !== undefined && usdVolume > 0) {
                                     return `$${Math.floor(usdVolume).toLocaleString()}`;
                                 }
-                                return volume > 0 ? Math.floor(volume).toLocaleString() : '0';
+                                
+                                // If no USD but we have raw volume, show raw volume with formatting
+                                if (volume !== null && volume !== undefined && volume > 0) {
+                                    // Format large numbers for readability
+                                    if (volume >= 1000000) {
+                                        return `${(volume / 1000000).toFixed(2)}M`;
+                                    }
+                                    if (volume >= 1000) {
+                                        return `${(volume / 1000).toFixed(2)}K`;
+                                    }
+                                    return Math.floor(volume).toLocaleString();
+                                }
+                                
+                                // If no volume at all, show 0
+                                return '0';
                             };
 
-                            const inDisplay = formatVolume(t.inVolume || 0, t.inVolumeUSD);
-                            const outDisplay = formatVolume(t.outVolume || 0, t.outVolumeUSD);
+                            const inDisplay = formatVolume(t.inVolume ?? 0, t.inVolumeUSD ?? null);
+                            const outDisplay = formatVolume(t.outVolume ?? 0, t.outVolumeUSD ?? null);
+                            
+                            // Check if price is available for tooltip
+                            const hasPrice = (t.inVolumeUSD !== null && t.inVolumeUSD !== undefined && t.inVolumeUSD > 0) ||
+                                           (t.outVolumeUSD !== null && t.outVolumeUSD !== undefined && t.outVolumeUSD > 0);
 
                             return (
                                 <div key={t.symbol} className={styles.walletRow}>
@@ -798,8 +1064,24 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                                             <Pin size={10} className={styles.pinIcon} />
                                         )}
                                     </span>
-                                    <span className={styles.walletVol}>{inDisplay}</span>
-                                    <span className={styles.walletVol}>{outDisplay}</span>
+                                    <span 
+                                        className={styles.walletVol}
+                                        title={!hasPrice && (t.inVolume > 0) ? 'Price not available - showing raw volume' : undefined}
+                                    >
+                                        {inDisplay}
+                                        {!hasPrice && t.inVolume > 0 && (
+                                            <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '2px' }}>raw</span>
+                                        )}
+                                    </span>
+                                    <span 
+                                        className={styles.walletVol}
+                                        title={!hasPrice && (t.outVolume > 0) ? 'Price not available - showing raw volume' : undefined}
+                                    >
+                                        {outDisplay}
+                                        {!hasPrice && t.outVolume > 0 && (
+                                            <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '2px' }}>raw</span>
+                                        )}
+                                    </span>
                                 </div>
                             );
                         })
@@ -821,6 +1103,9 @@ export const StatusFeed = ({ movements, onTokenClick, isClassicTheme = false }) 
             onTokenClick(token);
         }
     };
+
+    // Ensure movements is always an array
+    const movementsArray = Array.isArray(movements) ? movements : [];
 
     return (
         <section className={styles.sectorC} style={{ height: '100%', width: '100%' }}>
@@ -857,7 +1142,7 @@ export const StatusFeed = ({ movements, onTokenClick, isClassicTheme = false }) 
                 )}
             </div>
             <div className={styles.denseGrid}>
-                {movements
+                {movementsArray
                     .filter(m => !movementSearch || (m.symbol && m.symbol.includes(movementSearch.toUpperCase())) || (m.name && m.name.toUpperCase().includes(movementSearch.toUpperCase())))
                     .map((m, i) => {
                         const isDepositOk = m.deposit === 'Active';

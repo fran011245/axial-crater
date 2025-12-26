@@ -34,12 +34,12 @@ export async function GET(request) {
         const RETRY_DELAY = 1000; // 1 second
         
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
+        try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
                 
-                const tokenTxRes = await fetch(
-                    `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            const tokenTxRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=tokentx&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
                     { 
                         signal: controller.signal,
                         cache: 'no-store',
@@ -50,8 +50,8 @@ export async function GET(request) {
                 );
                 
                 clearTimeout(timeoutId);
-                
-                if (!tokenTxRes.ok) {
+            
+            if (!tokenTxRes.ok) {
                     const errorText = await tokenTxRes.text().catch(() => 'Unable to read error response');
                     console.error(`Etherscan token API HTTP error (attempt ${attempt}/${MAX_RETRIES}): ${tokenTxRes.status} ${tokenTxRes.statusText}`);
                     
@@ -64,13 +64,13 @@ export async function GET(request) {
                     
                     tokenTxData = { status: '0', result: [], message: `HTTP ${tokenTxRes.status}: ${errorText.substring(0, 100)}` };
                     break;
-                }
-                
-                const contentType = tokenTxRes.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    tokenTxData = await tokenTxRes.json();
-                } else {
-                    const text = await tokenTxRes.text();
+            }
+            
+            const contentType = tokenTxRes.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                tokenTxData = await tokenTxRes.json();
+            } else {
+                const text = await tokenTxRes.text();
                     console.error(`Etherscan token API returned non-JSON (attempt ${attempt}/${MAX_RETRIES}):`, text.substring(0, 200));
                     
                     if (attempt < MAX_RETRIES) {
@@ -79,19 +79,19 @@ export async function GET(request) {
                         continue;
                     }
                     
-                    tokenTxData = { status: '0', result: [], message: 'Invalid response format' };
+                tokenTxData = { status: '0', result: [], message: 'Invalid response format' };
                     break;
-                }
-                
-                // Validate Etherscan response
-                if (tokenTxData.status === '0') {
-                    if (tokenTxData.message === 'NOTOK') {
-                        if (tokenTxData.result?.includes('deprecated')) {
-                            console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+            }
+            
+            // Validate Etherscan response
+            if (tokenTxData.status === '0') {
+                if (tokenTxData.message === 'NOTOK') {
+                    if (tokenTxData.result?.includes('deprecated')) {
+                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
                             break; // Don't retry deprecated API
-                        } else if (tokenTxData.result?.includes('Missing/Invalid API Key')) {
-                            console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
-                            tokenTxData = { status: '0', result: [], message: 'No API key' };
+                    } else if (tokenTxData.result?.includes('Missing/Invalid API Key')) {
+                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                        tokenTxData = { status: '0', result: [], message: 'No API key' };
                             break; // Don't retry invalid API key
                         } else if (tokenTxData.result?.includes('timeout') || tokenTxData.result?.includes('server too busy')) {
                             // Retry on timeout/busy errors
@@ -102,17 +102,17 @@ export async function GET(request) {
                             } else {
                                 console.error('Etherscan API timeout/busy after all retries:', tokenTxData.message);
                             }
-                        } else if (tokenTxData.message !== 'No transactions found') {
+                    } else if (tokenTxData.message !== 'No transactions found') {
                             console.warn(`Etherscan token API error (attempt ${attempt}/${MAX_RETRIES}):`, tokenTxData.message, tokenTxData.result);
                             // Don't retry on other NOTOK errors
                             break;
-                        }
                     }
-                } else if (tokenTxData.status === '1') {
-                    if (process.env.NODE_ENV === 'development') {
+                }
+            } else if (tokenTxData.status === '1') {
+                if (process.env.NODE_ENV === 'development') {
                         console.log(`✅ Token transfers fetched successfully (attempt ${attempt}): ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
-                        if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
-                            console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
+                    if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
+                        console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
                         }
                     }
                     break; // Success, exit retry loop
@@ -149,12 +149,12 @@ export async function GET(request) {
         let ethTxData = { status: '0', result: [] };
         
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
+        try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per attempt
                 
-                const ethTxRes = await fetch(
-                    `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            const ethTxRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
                     { 
                         signal: controller.signal,
                         cache: 'no-store',
@@ -181,17 +181,17 @@ export async function GET(request) {
                     break;
                 }
                 
-                ethTxData = await ethTxRes.json();
-                
-                // Validate Etherscan response
-                if (ethTxData.status === '0') {
-                    if (ethTxData.message === 'NOTOK') {
-                        if (ethTxData.result?.includes('deprecated')) {
-                            console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
+            ethTxData = await ethTxRes.json();
+            
+            // Validate Etherscan response
+            if (ethTxData.status === '0') {
+                if (ethTxData.message === 'NOTOK') {
+                    if (ethTxData.result?.includes('deprecated')) {
+                        console.error('Etherscan API V1 deprecated. Using V2 but may need valid API key.');
                             break; // Don't retry deprecated API
-                        } else if (ethTxData.result?.includes('Missing/Invalid API Key')) {
-                            console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
-                            ethTxData = { status: '0', result: [], message: 'No API key' };
+                    } else if (ethTxData.result?.includes('Missing/Invalid API Key')) {
+                        console.warn('⚠️ Etherscan API key invalid or missing. Add ETHERSCAN_API_KEY to Vercel env vars.');
+                        ethTxData = { status: '0', result: [], message: 'No API key' };
                             break; // Don't retry invalid API key
                         } else if (ethTxData.result?.includes('timeout') || ethTxData.result?.includes('server too busy')) {
                             // Retry on timeout/busy errors
@@ -202,7 +202,7 @@ export async function GET(request) {
                             } else {
                                 console.error('Etherscan ETH API timeout/busy after all retries:', ethTxData.message);
                             }
-                        } else if (ethTxData.message !== 'No transactions found') {
+                    } else if (ethTxData.message !== 'No transactions found') {
                             console.warn(`Etherscan ETH API error (attempt ${attempt}/${MAX_RETRIES}):`, ethTxData.message, ethTxData.result);
                             // Don't retry on other NOTOK errors
                             break;
@@ -247,12 +247,12 @@ export async function GET(request) {
         const PENDING_MAX_RETRIES = 2;
         
         for (let attempt = 1; attempt <= PENDING_MAX_RETRIES; attempt++) {
-            try {
+        try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout per attempt
                 
-                const pendingRes = await fetch(
-                    `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
+            const pendingRes = await fetch(
+                `https://api.etherscan.io/v2/api?module=account&action=txlist&address=${WALLET_ADDRESS}&chainid=1&startblock=0&endblock=99999999&sort=desc&apikey=${ETHERSCAN_API_KEY}`,
                     { 
                         signal: controller.signal,
                         cache: 'no-store',
@@ -273,13 +273,13 @@ export async function GET(request) {
                     break;
                 }
                 
-                pendingData = await pendingRes.json();
-                
-                // Validate response before processing
-                if (pendingData.status === '0' && pendingData.message === 'NOTOK') {
-                    if (pendingData.result?.includes('Missing/Invalid API Key')) {
-                        console.warn('⚠️ Etherscan API key invalid for pending transactions check.');
-                        pendingData = { status: '0', result: [] };
+            pendingData = await pendingRes.json();
+            
+            // Validate response before processing
+            if (pendingData.status === '0' && pendingData.message === 'NOTOK') {
+                if (pendingData.result?.includes('Missing/Invalid API Key')) {
+                    console.warn('⚠️ Etherscan API key invalid for pending transactions check.');
+                    pendingData = { status: '0', result: [] };
                         break; // Don't retry invalid API key
                     } else if (pendingData.result?.includes('timeout') || pendingData.result?.includes('server too busy')) {
                         // Retry on timeout/busy errors
@@ -428,8 +428,149 @@ export async function GET(request) {
             console.log('Tokens OUT volumes:', Object.entries(tokensOut).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
         }
         
-        // Mapping for common tokens to CoinGecko IDs (fallback when contract address lookup fails)
+        // Simple in-memory cache for prices (5 minutes TTL)
+        // In production, consider using Redis or similar for distributed caching
+        const PRICE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+        if (!global.priceCache) {
+            global.priceCache = new Map();
+        }
+        const priceCache = global.priceCache;
+        
+        // Clean old cache entries periodically
+        const cacheNow = Date.now();
+        for (const [key, value] of priceCache.entries()) {
+            if (cacheNow - value.timestamp > PRICE_CACHE_TTL) {
+                priceCache.delete(key);
+            }
+        }
+        
+        // Check cache first
+        const cacheKey = Array.from(allSymbols).sort().join(',');
+        const cached = priceCache.get(cacheKey);
+        let tokenPrices = {};
+        
+        if (cached && (cacheNow - cached.timestamp) < PRICE_CACHE_TTL) {
+            if (process.env.NODE_ENV === 'development') {
+                console.log('✅ Using cached prices');
+            }
+            tokenPrices = cached.prices;
+        } else {
+            // Fetch token prices from CoinMarketCap (with CoinGecko fallback)
+        const CMC_API_KEY = process.env.COINMARKETCAP_API_KEY;
+        const MAX_RETRIES = 2;
+        const RETRY_DELAY = 1000;
+
+        // Function to fetch prices from CoinMarketCap
+        const fetchCoinMarketCapPrices = async (symbols) => {
+            if (!CMC_API_KEY) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('ℹ️ COINMARKETCAP_API_KEY not set. Will use CoinGecko as fallback.');
+                }
+                return null; // Signal to use fallback
+            }
+
+            // CoinMarketCap allows up to 100 symbols per request
+            const symbolsArray = Array.from(symbols).slice(0, 100);
+            const symbolsList = symbolsArray.join(',');
+
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+
+                    const response = await fetch(
+                        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=${symbolsList}&convert=USD`,
+                        {
+                            signal: controller.signal,
+                            headers: {
+                                'X-CMC_PRO_API_KEY': CMC_API_KEY,
+                                'Accept': 'application/json'
+                            },
+                            cache: 'no-store'
+                        }
+                    );
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => 'Unable to read error response');
+                        console.warn(`CoinMarketCap API returned status ${response.status} (attempt ${attempt}/${MAX_RETRIES}): ${errorText.substring(0, 100)}`);
+                        
+                        // Retry on 5xx errors or rate limit (429)
+                        if ((response.status >= 500 || response.status === 429) && attempt < MAX_RETRIES) {
+                            console.warn(`Retrying CoinMarketCap API in ${RETRY_DELAY * attempt}ms...`);
+                            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                            continue;
+                        }
+                        
+                        // If 401/403, API key might be invalid, try fallback
+                        if (response.status === 401 || response.status === 403) {
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn('⚠️ CoinMarketCap API key invalid or missing. Using CoinGecko fallback.');
+                            }
+                            return null; // Signal to use fallback
+                        }
+                        
+                        return {}; // Empty prices on other errors
+                    }
+
+                    const data = await response.json();
+                    const prices = {};
+
+                    // CoinMarketCap response structure:
+                    // { data: { SYMBOL: [{ quote: { USD: { price: ... } } }] } }
+                    if (data.data) {
+                        Object.keys(data.data).forEach(symbol => {
+                            const tokenData = data.data[symbol];
+                            // Handle array response (multiple tokens with same symbol)
+                            const tokenArray = Array.isArray(tokenData) ? tokenData : [tokenData];
+                            
+                            // Use first result (most popular) or filter by Ethereum platform
+                            const ethereumToken = tokenArray.find(t => 
+                                t.platform && t.platform.name === 'Ethereum'
+                            ) || tokenArray[0];
+                            
+                            if (ethereumToken && ethereumToken.quote && ethereumToken.quote.USD && ethereumToken.quote.USD.price) {
+                                prices[symbol.toUpperCase()] = ethereumToken.quote.USD.price;
+                            }
+                        });
+                    }
+
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ Fetched ${Object.keys(prices).length} prices from CoinMarketCap`);
+                    }
+
+                    return prices;
+                } catch (error) {
+                    const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                    const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                    
+                    console.error(`Error fetching CoinMarketCap prices (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
+                    
+                    if (process.env.NODE_ENV === 'development') {
+                        console.error('Full error:', error);
+                    }
+                    
+                    // Retry on timeout or network errors
+                    if ((isTimeout || isNetworkError) && attempt < MAX_RETRIES) {
+                        console.warn(`Retrying CoinMarketCap API in ${RETRY_DELAY * attempt}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
+                        continue;
+                    }
+                    
+                    // On final failure, try fallback
+                    return null;
+                }
+            }
+            
+            return null; // Signal to use fallback
+        };
+
+        // Function to fetch prices from CoinGecko (fallback, no API key needed)
+        const fetchCoinGeckoPrices = async (symbols) => {
+            // CoinGecko mapping for common tokens
         const symbolToCoinGeckoId = {
+                'ETH': 'ethereum',
             'USDT': 'tether',
             'USDC': 'usd-coin',
             'DAI': 'dai',
@@ -440,220 +581,132 @@ export async function GET(request) {
             'AAVE': 'aave',
             'MATIC': 'matic-network',
             'SHIB': 'shiba-inu',
-            'CRV': 'curve-dao-token',
-            'MKR': 'maker',
-            'SNX': 'havven',
-            'COMP': 'compound-governance-token',
-            'YFI': 'yearn-finance',
-            'SUSHI': 'sushi',
-            'GRT': 'the-graph',
-            'BAT': 'basic-attention-token',
-            'ENJ': 'enjincoin',
-            'MANA': 'decentraland',
-            'SAND': 'the-sandbox',
-            'AXS': 'axie-infinity',
-            'FTM': 'fantom',
-            'AVAX': 'avalanche-2',
-            'ATOM': 'cosmos',
-            'DOT': 'polkadot',
-            'SOL': 'solana',
-            'ADA': 'cardano',
-            'XRP': 'ripple',
-            'DOGE': 'dogecoin',
-            'LTC': 'litecoin',
-            'BCH': 'bitcoin-cash',
-            'ETC': 'ethereum-classic',
-            'XLM': 'stellar',
-            'XMR': 'monero',
-            'TRX': 'tron',
-            'EOS': 'eos',
-            'NEO': 'neo',
-            'VET': 'vechain',
-            'THETA': 'theta-token',
-            'FIL': 'filecoin',
-            'ALGO': 'algorand',
-            'XTZ': 'tezos',
-            'DASH': 'dash',
-            'ZEC': 'zcash',
-            'WAVES': 'waves',
-            'QTUM': 'qtum',
-            'ONT': 'ontology',
-            'ZIL': 'zilliqa',
-            'ICX': 'icon',
-            'OMG': 'omisego',
-            'ZRX': '0x',
-            'LEND': 'ethlend',
-            'REN': 'republic-protocol',
-            'KNC': 'kyber-network',
-            'BAL': 'balancer',
-            'BAND': 'band-protocol',
-            'NMR': 'numeraire',
-            'ANT': 'aragon',
-            'REP': 'augur',
-            'LRC': 'loopring',
-            'STORJ': 'storj',
-            'GNO': 'gnosis',
-            'RLC': 'iexec-rlc',
-            'BNT': 'bancor',
-            'MLN': 'melon',
-            'POLY': 'polymath',
-            'POWR': 'power-ledger',
-            'REQ': 'request-network',
-            'MONA': 'monavale',
-            'MTL': 'metal',
-            'PAY': 'tenx',
-            'SALT': 'salt',
-            'SUB': 'substratum',
-            'TNB': 'time-new-bank',
-            'TNT': 'tierion',
-            'VEN': 'vechain',
-            'VIB': 'viberate',
-            'VIBE': 'vibe',
-            'WABI': 'wabi',
-            'WTC': 'waltonchain',
-            'XVG': 'verge',
-            'XZC': 'zcoin',
-            'YOYO': 'yoyow',
-            'PEPE': 'pepe',
-            'FLOKI': 'floki',
-            'GALA': 'gala',
-            'CHZ': 'chiliz',
-            'ENA': 'ethena',
-            'GMT': 'stepn',
-            'FET': 'fetch-ai',
-            'POL': 'polygon',
-            'JASMY': 'jasmycoin'
-        };
+                'PEPE': 'pepe',
+                'FLOKI': 'floki',
+                'CHZ': 'chiliz',
+                'GALA': 'gala',
+                'GMT': 'stepn',
+                'FET': 'fetch-ai',
+                'POL': 'polygon',
+                'JASMY': 'jasmycoin',
+                'ENA': 'ethena'
+            };
 
-        // Fetch token prices from Bitfinex
-        // Retry logic for Bitfinex API
-        const tokenPrices = {};
-        const BITFINEX_MAX_RETRIES = 2;
-        const BITFINEX_RETRY_DELAY = 500;
-        
-        for (let attempt = 1; attempt <= BITFINEX_MAX_RETRIES; attempt++) {
+            // Build list of CoinGecko IDs
+            const coinGeckoIds = [];
+            const symbolToIdMap = new Map();
+            
+            Array.from(symbols).forEach(symbol => {
+                const id = symbolToCoinGeckoId[symbol.toUpperCase()];
+                if (id) {
+                    coinGeckoIds.push(id);
+                    symbolToIdMap.set(id, symbol.toUpperCase());
+                }
+            });
+
+            if (coinGeckoIds.length === 0) {
+                return {};
+            }
+
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
                 
-                const tickersRes = await fetch('https://api-pub.bitfinex.com/v2/tickers?symbols=ALL', {
-                    signal: controller.signal,
-                    cache: 'no-store',
-                    headers: {
-                        'Content-Type': 'application/json',
+                const idsList = coinGeckoIds.join(',');
+                const response = await fetch(
+                    `https://api.coingecko.com/api/v3/simple/price?ids=${idsList}&vs_currencies=usd`,
+                    {
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
                     }
-                });
-                
+                );
+
                 clearTimeout(timeoutId);
 
-                if (!tickersRes.ok) {
-                    const errorText = await tickersRes.text().catch(() => 'Unable to read error response');
-                    console.warn(`Bitfinex API returned status ${tickersRes.status} (attempt ${attempt}/${BITFINEX_MAX_RETRIES}): ${errorText.substring(0, 100)}`);
-                    
-                    // Retry on 5xx errors or rate limit (429)
-                    if ((tickersRes.status >= 500 || tickersRes.status === 429) && attempt < BITFINEX_MAX_RETRIES) {
-                        console.warn(`Retrying Bitfinex API in ${BITFINEX_RETRY_DELAY * attempt}ms...`);
-                        await new Promise(resolve => setTimeout(resolve, BITFINEX_RETRY_DELAY * attempt));
-                        continue;
-                    }
-                    
-                    // If all retries failed, continue without prices
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn('⚠️ Failed to fetch prices from Bitfinex after all retries. Tokens will have price 0.');
-                    }
-                    break;
-                } else {
-                const tickersData = await tickersRes.json();
-                
-                // Ticker format: [SYMBOL, BID, BID_SIZE, ASK, ASK_SIZE, DAILY_CHANGE, DAILY_CHANGE_PERC, LAST_PRICE, VOLUME, HIGH, LOW]
-                // Create a map of Bitfinex symbols to prices
-                const bitfinexPriceMap = new Map();
-                
-                tickersData.forEach(ticker => {
-                    const symbol = ticker[0];
-                    if (symbol.startsWith('t')) {
-                        const lastPrice = ticker[7]; // LAST_PRICE is at index 7
-                        if (lastPrice && lastPrice > 0) {
-                            // Remove 't' prefix and store: tBTCUSD -> BTCUSD
-                            const symbolWithoutPrefix = symbol.substring(1);
-                            bitfinexPriceMap.set(symbolWithoutPrefix, lastPrice);
-                        }
+                if (!response.ok) {
+                    console.warn(`CoinGecko API returned status ${response.status}`);
+                    return {};
+                }
+
+                const data = await response.json();
+                const prices = {};
+
+                // CoinGecko response: { "ethereum": { "usd": 2920.1 }, ... }
+                Object.keys(data).forEach(id => {
+                    const symbol = symbolToIdMap.get(id);
+                    if (symbol && data[id].usd) {
+                        prices[symbol] = data[id].usd;
                     }
                 });
 
                 if (process.env.NODE_ENV === 'development') {
-                    console.log(`Fetched ${bitfinexPriceMap.size} tickers from Bitfinex`);
+                    console.log(`✅ Fetched ${Object.keys(prices).length} prices from CoinGecko (fallback)`);
                 }
 
-                // Map ERC20 token symbols to Bitfinex symbols
-                // Bitfinex format: SYMBOLUSD (e.g., USDTUSD, PEPEUSD) or SYMBOL:USD (e.g., ETH:USD)
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`Sample Bitfinex symbols:`, Array.from(bitfinexPriceMap.keys()).slice(0, 10).join(', '));
-                    console.log(`Tokens to match:`, Array.from(allSymbols).join(', '));
-                }
-                
-                Array.from(allSymbols).forEach(symbol => {
-                    if (symbol === 'ETH') {
-                        // ETH is special - try ETHUSD first, then ETH:USD
-                        const ethPrice = bitfinexPriceMap.get('ETHUSD') || bitfinexPriceMap.get('ETH:USD');
-                        if (ethPrice) {
-                            tokenPrices['ETH'] = ethPrice;
-                        } else if (process.env.NODE_ENV === 'development') {
-                            console.log(`ETH not found in Bitfinex. Available ETH symbols:`, Array.from(bitfinexPriceMap.keys()).filter(k => k.includes('ETH')).join(', '));
-                        }
-                    } else {
-                        // Try direct match: SYMBOLUSD
-                        const directMatch = bitfinexPriceMap.get(`${symbol}USD`);
-                        if (directMatch) {
-                            tokenPrices[symbol] = directMatch;
-                        } else {
-                            // Try with colon: SYMBOL:USD
-                            const colonMatch = bitfinexPriceMap.get(`${symbol}:USD`);
-                            if (colonMatch) {
-                                tokenPrices[symbol] = colonMatch;
-                            } else if (process.env.NODE_ENV === 'development') {
-                                // Debug: show similar symbols
-                                const similar = Array.from(bitfinexPriceMap.keys()).filter(k => k.includes(symbol)).slice(0, 3);
-                                if (similar.length > 0) {
-                                    console.log(`Token ${symbol} not found. Similar symbols:`, similar.join(', '));
-                                }
-                            }
-                        }
-                    }
-                });
-
-                    if (process.env.NODE_ENV === 'development') {
-                        console.log(`✅ Matched ${Object.keys(tokenPrices).length} tokens with Bitfinex prices (attempt ${attempt}):`, Object.keys(tokenPrices).join(', '));
-                    }
-                    break; // Success, exit retry loop
-                }
+                return prices;
             } catch (error) {
-                const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
-                const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
-                
-                console.error(`Error fetching token prices from Bitfinex (attempt ${attempt}/${BITFINEX_MAX_RETRIES}):`, error.message);
-                
-                if (process.env.NODE_ENV === 'development') {
-                    console.error('Full error:', error);
-                }
-                
-                // Retry on timeout or network errors
-                if ((isTimeout || isNetworkError) && attempt < BITFINEX_MAX_RETRIES) {
-                    console.warn(`Retrying Bitfinex API in ${BITFINEX_RETRY_DELAY * attempt}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
-                    await new Promise(resolve => setTimeout(resolve, BITFINEX_RETRY_DELAY * attempt));
-                    continue;
-                }
-                
-                // If all retries failed, continue without prices
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn('⚠️ Failed to fetch prices from Bitfinex after all retries. Tokens will have price 0.');
-                }
-                break;
+                console.error('Error fetching CoinGecko prices:', error.message);
+                return {};
             }
-        }
+        };
+
+        // Try CoinMarketCap first, fallback to CoinGecko
+        let prices = await fetchCoinMarketCapPrices(allSymbols);
         
+        if (prices === null) {
+            // Use CoinGecko as fallback
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Using CoinGecko as fallback for token prices');
+            }
+            prices = await fetchCoinGeckoPrices(allSymbols);
+        }
+
+        // Merge prices into tokenPrices
+        Object.assign(tokenPrices, prices);
+
+        // Normalize prices: ensure all symbols in allSymbols have their price mapped correctly
+        // CoinMarketCap returns uppercase symbols, but we need to match original case
+        const normalizedPrices = {};
+        Array.from(allSymbols).forEach(symbol => {
+            const symbolUpper = symbol.toUpperCase();
+            // Try uppercase first (CoinMarketCap format), then original case, then case-insensitive search
+            if (tokenPrices[symbolUpper]) {
+                normalizedPrices[symbol] = tokenPrices[symbolUpper];
+            } else if (tokenPrices[symbol]) {
+                normalizedPrices[symbol] = tokenPrices[symbol];
+            } else {
+                // Case-insensitive search
+                const foundKey = Object.keys(tokenPrices).find(k => k.toUpperCase() === symbolUpper);
+                if (foundKey) {
+                    normalizedPrices[symbol] = tokenPrices[foundKey];
+                }
+            }
+        });
+        
+            // Replace tokenPrices with normalized version
+            Object.assign(tokenPrices, normalizedPrices);
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`✅ Total tokens with prices: ${Object.keys(tokenPrices).length} out of ${allSymbols.size}`);
+                console.log(`Tokens with prices:`, Object.keys(tokenPrices).join(', '));
+                const tokensWithoutPrice = Array.from(allSymbols).filter(s => !tokenPrices[s.toUpperCase()] && !tokenPrices[s]);
+                if (tokensWithoutPrice.length > 0) {
+                    console.log(`Tokens without prices:`, tokensWithoutPrice.join(', '));
+                }
+            }
+
+            // Store in cache
+            priceCache.set(cacheKey, {
+                prices: tokenPrices,
+                timestamp: cacheNow
+            });
+        }
+
         if (Object.keys(tokenPrices).length === 0 && allSymbols.size > 0) {
-            console.warn(`⚠️ No token prices fetched from Bitfinex. ${allSymbols.size} tokens will have price 0.`);
+            console.warn(`⚠️ No token prices fetched. ${allSymbols.size} tokens will have price 0.`);
         }
 
         // Ensure ETH is in the symbols list if it has volume

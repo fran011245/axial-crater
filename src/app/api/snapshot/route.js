@@ -70,10 +70,24 @@ export async function POST(request) {
         const fundingData = await fundingRes.json();
         const walletData = await walletRes.json();
 
+        // Fetch movements to get deposit/withdrawal status
+        const movementsRes = await fetch(`${baseUrl}/api/movements`, { cache: 'no-store' });
+        const movements = movementsRes.ok ? await movementsRes.json() : [];
+
         if (!isProd) console.log('[Snapshot] Data fetched successfully');
 
         // Prepare data for insertion
         const timestamp = new Date().toISOString();
+
+        // Helper function to get movement status for a symbol
+        const getMovementStatus = (pairSymbol) => {
+            const base = pairSymbol.replace('USD', '').replace('UST', '');
+            const mv = movements.find(m => m.symbol === base || m.name === base);
+            return {
+                deposit: mv ? (mv.deposit === 'Active' ? 'OK' : 'CLSD') : 'NA',
+                withdrawal: mv ? (mv.withdrawal === 'Active' ? 'OK' : 'CLSD') : 'NA'
+            };
+        };
 
         // 1. Volume Snapshot
         const volumeSnapshot = {
@@ -156,6 +170,183 @@ export async function POST(request) {
         }
 
         if (!isProd) console.log('[Snapshot] All snapshots saved successfully');
+
+        // Now write to normalized tables
+        try {
+            // 1. Normalize trading pairs and snapshots
+            const allPairs = [...(volumeData.topPairs || []), ...(volumeData.lowPairs || [])];
+            const pairMap = new Map(); // symbol -> trading_pair_id
+
+            for (const pair of allPairs) {
+                try {
+                    // Get or create trading pair
+                    let pairId = pairMap.get(pair.symbol);
+                    
+                    if (!pairId) {
+                        // Check if pair exists
+                        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/trading_pairs?symbol=eq.${encodeURIComponent(pair.symbol)}&select=id`, {
+                            headers: {
+                                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+                            }
+                        });
+
+                        if (checkRes.ok) {
+                            const existing = await checkRes.json();
+                            if (existing.length > 0) {
+                                pairId = existing[0].id;
+                                // Update last_seen_at
+                                await fetch(`${SUPABASE_URL}/rest/v1/trading_pairs?id=eq.${pairId}`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ last_seen_at: timestamp })
+                                });
+                            }
+                        }
+
+                        // Create if doesn't exist
+                        if (!pairId) {
+                            const baseCurrency = pair.symbol.replace(/USD$|UST$/, '');
+                            const quoteCurrency = pair.symbol.endsWith('UST') ? 'UST' : 'USD';
+                            
+                            const createRes = await fetch(`${SUPABASE_URL}/rest/v1/trading_pairs`, {
+                                method: 'POST',
+                                headers: {
+                                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                                    'Content-Type': 'application/json',
+                                    'Prefer': 'return=representation'
+                                },
+                                body: JSON.stringify({
+                                    symbol: pair.symbol,
+                                    base_currency: baseCurrency,
+                                    quote_currency: quoteCurrency,
+                                    is_active: true,
+                                    first_seen_at: timestamp,
+                                    last_seen_at: timestamp
+                                })
+                            });
+
+                            if (createRes.ok) {
+                                const created = await createRes.json();
+                                pairId = Array.isArray(created) ? created[0].id : created.id;
+                            }
+                        }
+
+                        if (pairId) {
+                            pairMap.set(pair.symbol, pairId);
+                        }
+                    }
+
+                    // Create snapshot record
+                    if (pairId) {
+                        const status = getMovementStatus(pair.symbol);
+                        await fetch(`${SUPABASE_URL}/rest/v1/trading_pair_snapshots`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=minimal'
+                            },
+                            body: JSON.stringify({
+                                trading_pair_id: pairId,
+                                snapshot_timestamp: timestamp,
+                                last_price: pair.lastPrice || null,
+                                daily_change_percent: pair.change || null,
+                                volume_24h_usd: pair.volumeUSD || null,
+                                volume_7d_usd: pair.vol7d || null,
+                                volume_30d_usd: pair.vol30d || null,
+                                spread_percent: pair.spreadPercent || null,
+                                bid_price: null,
+                                ask_price: null,
+                                deposit_status: status.deposit,
+                                withdrawal_status: status.withdrawal
+                            })
+                        });
+                    }
+                } catch (error) {
+                    if (!isProd) console.error(`[Snapshot] Error normalizing pair ${pair.symbol}:`, error.message);
+                }
+            }
+
+            // 2. Normalize funding rates
+            for (const stat of fundingData.fundingStats || []) {
+                try {
+                    await fetch(`${SUPABASE_URL}/rest/v1/funding_rates`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            symbol: stat.symbol || null,
+                            snapshot_timestamp: timestamp,
+                            apr_1h: stat.apr1h || null,
+                            volume_24h: stat.volume24h || null,
+                            frr: stat.frr || null
+                        })
+                    });
+                } catch (error) {
+                    if (!isProd) console.error(`[Snapshot] Error normalizing funding rate for ${stat.symbol}:`, error.message);
+                }
+            }
+
+            // 3. Normalize wallet token snapshots
+            for (const token of walletData.tokens || []) {
+                try {
+                    const inVolUSD = token.inVolumeUSD || token.inVolume || 0;
+                    const outVolUSD = token.outVolumeUSD || token.outVolume || 0;
+                    const netVolUSD = inVolUSD - outVolUSD;
+
+                    await fetch(`${SUPABASE_URL}/rest/v1/wallet_token_snapshots`, {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            token_symbol: token.symbol || 'UNKNOWN',
+                            snapshot_timestamp: timestamp,
+                            in_volume: token.inVolume || null,
+                            in_volume_usd: inVolUSD || null,
+                            out_volume: token.outVolume || null,
+                            out_volume_usd: outVolUSD || null,
+                            net_volume_usd: netVolUSD || null
+                        })
+                    });
+                } catch (error) {
+                    if (!isProd) console.error(`[Snapshot] Error normalizing wallet token ${token.symbol}:`, error.message);
+                }
+            }
+
+            // 4. Calculate daily aggregation
+            try {
+                await fetch(`${SUPABASE_URL}/rest/v1/rpc/calculate_daily_aggregation?date=${new Date().toISOString().split('T')[0]}`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            } catch (error) {
+                if (!isProd) console.error('[Snapshot] Error calculating daily aggregation:', error.message);
+            }
+
+            if (!isProd) console.log('[Snapshot] Normalized data saved successfully');
+        } catch (error) {
+            // Don't fail the entire request if normalization fails
+            console.error('[Snapshot] Error saving normalized data:', error);
+        }
 
         return NextResponse.json({
             success: true,

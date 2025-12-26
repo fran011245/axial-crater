@@ -142,7 +142,9 @@ export default function TerminalPage() {
 
                 setStatus(await statusRes.json());
                 setVolume(await volumeRes.json());
-                setMovements(await mvRes.json());
+                const movementsData = await mvRes.json();
+                // Ensure movements is always an array
+                setMovements(Array.isArray(movementsData) ? movementsData : []);
             } catch (e) { console.error(e); }
         }
         fetchData();

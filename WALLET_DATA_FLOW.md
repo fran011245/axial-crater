@@ -66,17 +66,29 @@ This document explains how tokens are retrieved from Etherscan and displayed in 
 2. Filter out zero-value transactions (contract calls)
 3. Same IN/OUT logic as tokens
 
-### Price Fetching (CoinGecko)
+### Price Fetching (CoinMarketCap with CoinGecko Fallback)
 
-**For ETH:**
-- Endpoint: `https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`
-- Maps to `tokenPrices['ETH']`
+**Primary: CoinMarketCap API**
+- **Endpoint**: `https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol={SYMBOLS}&convert=USD`
+- **API Key**: Required (set via `COINMARKETCAP_API_KEY` environment variable)
+- **Batch Support**: Up to 100 symbols per request
+- **Response Format**: `{ data: { SYMBOL: [{ quote: { USD: { price: ... } } }] } }`
+- **Token Matching**: 
+  - Matches by symbol (case-insensitive)
+  - Filters by Ethereum platform when multiple tokens share the same symbol
+  - Uses most popular token if Ethereum-specific match not found
 
-**For ERC-20 Tokens:**
-- Uses contract addresses from token transfers
-- Endpoint: `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses={addresses}&vs_currencies=usd`
-- Maps contract addresses back to symbols
-- Limits to 100 tokens per request
+**Fallback: CoinGecko API (No API Key Required)**
+- **Trigger**: Used when `COINMARKETCAP_API_KEY` is not set or API returns 401/403
+- **Endpoint**: `https://api.coingecko.com/api/v3/simple/price?ids={IDS}&vs_currencies=usd`
+- **Mapping**: Uses predefined symbol-to-CoinGecko-ID mapping for common tokens
+- **Supported Tokens**: ETH, USDT, USDC, DAI, PEPE, SHIB, FLOKI, CHZ, and others
+
+**Caching:**
+- **TTL**: 5 minutes
+- **Storage**: In-memory cache (global.priceCache)
+- **Key**: Sorted comma-separated list of token symbols
+- **Purpose**: Reduces API calls and improves performance
 
 ### Final Token Data Structure
 
@@ -150,9 +162,13 @@ Etherscan API
     ↓
 [Process: Calculate IN/OUT volumes per token]
     ↓
-[Fetch Prices: CoinGecko API]
+[Check Price Cache (5 min TTL)]
     ↓
-[Calculate USD Values]
+[Fetch Prices: CoinMarketCap API (or CoinGecko fallback)]
+    ↓
+[Store in Cache]
+    ↓
+[Calculate USD Values: volume × price]
     ↓
 [Sort by Total Volume]
     ↓
@@ -170,13 +186,18 @@ Frontend: WalletMonitor Component
 ## 5. Current Limitations & Notes
 
 ### Limitations:
-1. **Price Availability**: Not all tokens have prices on CoinGecko
-   - Falls back to raw token amounts
+1. **Price Availability**: Not all tokens have prices on CoinMarketCap or CoinGecko
+   - Falls back to raw token amounts (displays with "raw" label)
 2. **Token Limit**: Only top 10 tokens displayed
 3. **Time Window**: Fixed 24-hour window
-4. **Rate Limits**: Etherscan API has rate limits
+4. **Rate Limits**: 
+   - Etherscan API: Rate limits apply
+   - CoinMarketCap: Free tier allows 333 calls/day (10,000/month)
+   - CoinGecko: Public API has rate limits
    - Cache: 30 seconds for transaction data
-   - Cache: 5 minutes for prices
+   - Cache: 5 minutes for prices (reduces API calls)
+5. **API Key**: CoinMarketCap requires API key for full functionality
+   - Without key, falls back to CoinGecko (limited token support)
 
 ### Data Accuracy:
 - ✅ Accurate for ERC-20 tokens with standard decimals
