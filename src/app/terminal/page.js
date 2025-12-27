@@ -78,6 +78,9 @@ export default function TerminalPage() {
         const layouts = { ...baseLayouts };
         const breakpoints = ['lg', 'md', 'sm', 'xs'];
         
+        // Safe check: isMobile might be undefined during SSR
+        const mobileMode = typeof isMobile !== 'undefined' ? isMobile : false;
+        
         breakpoints.forEach(bp => {
             const base = [...baseLayouts[bp]];
             // Position token widgets between market and feed (around y: 4.1-6.0 for lg/md)
@@ -100,7 +103,7 @@ export default function TerminalPage() {
                         maxW: 1.5,
                         minH: 0.8,
                         maxH: 1.2,
-                        static: isMobile && bp === 'xs' // Static in mobile
+                        static: mobileMode && bp === 'xs' // Static in mobile
                     });
                 } else {
                     // For smaller screens, stack vertically
@@ -112,13 +115,13 @@ export default function TerminalPage() {
                         h: 1.0,
                         minW: 2,
                         minH: 0.8,
-                        static: isMobile && bp === 'xs' // Static in mobile
+                        static: mobileMode && bp === 'xs' // Static in mobile
                     });
                 }
             });
             
             // Make all base layouts static in mobile (xs breakpoint)
-            if (isMobile && bp === 'xs') {
+            if (mobileMode && bp === 'xs') {
                 base.forEach(item => {
                     item.static = true;
                 });

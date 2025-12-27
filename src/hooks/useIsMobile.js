@@ -7,10 +7,15 @@ import { useState, useEffect } from 'react';
  * @returns {Object} { isMobile: boolean, isTablet: boolean }
  */
 export const useIsMobile = () => {
+    // Inicializar con false para SSR (server-side rendering)
     const [isMobile, setIsMobile] = useState(false);
     const [isTablet, setIsTablet] = useState(false);
+    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+        // Marcar que estamos en el cliente
+        setIsClient(true);
+        
         // Solo ejecutar en el cliente
         if (typeof window === 'undefined') return;
 
@@ -31,6 +36,11 @@ export const useIsMobile = () => {
             window.removeEventListener('resize', checkSize);
         };
     }, []);
+
+    // Durante SSR, retornar false para evitar errores
+    if (!isClient) {
+        return { isMobile: false, isTablet: false };
+    }
 
     return { isMobile, isTablet };
 };
