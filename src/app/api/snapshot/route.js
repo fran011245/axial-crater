@@ -10,15 +10,21 @@ export async function POST(request) {
     try {
         // Require a secret header to prevent public triggering (DoS / cost leak)
         // Edge/Cron callers should send: x-snapshot-secret: <SNAPSHOT_SECRET>
-        if (!SNAPSHOT_SECRET) {
-            return NextResponse.json(
-                { success: false, error: 'Server missing SNAPSHOT_SECRET' },
-                { status: 500 }
-            );
-        }
-        const provided = request.headers.get('x-snapshot-secret') || '';
-        if (provided !== SNAPSHOT_SECRET) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        // Vercel cron jobs send x-vercel-cron header, which we trust
+        const isVercelCron = request.headers.get('x-vercel-cron') === '1';
+        
+        if (!isVercelCron) {
+            // For non-Vercel cron requests, require the secret
+            if (!SNAPSHOT_SECRET) {
+                return NextResponse.json(
+                    { success: false, error: 'Server missing SNAPSHOT_SECRET' },
+                    { status: 500 }
+                );
+            }
+            const provided = request.headers.get('x-snapshot-secret') || '';
+            if (provided !== SNAPSHOT_SECRET) {
+                return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+            }
         }
 
         // Rate limiting (bypass for Supabase Edge Functions)
