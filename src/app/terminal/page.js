@@ -131,7 +131,7 @@ export default function TerminalPage() {
         });
         
         return layouts;
-    }, [tokenWidgets, isMobile]);
+    }, [tokenWidgets, isMobile ?? false]);
 
     useEffect(() => {
         // Mark component as mounted to avoid hydration mismatch
