@@ -4,6 +4,43 @@ import { rateLimit, getRateLimitHeaders } from '@/lib/rateLimit';
 const WALLET_ADDRESS = '0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC';
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
 
+// Mapa de contract addresses conocidos para tokens populares
+// Esto permite obtener balances incluso si el token no tuvo transacciones recientes
+const KNOWN_TOKEN_CONTRACTS = {
+    'UNI': '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
+    'USDT': '0xdac17f958d2ee523a2206206994597c13d831ec7',
+    'USDC': '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    'LINK': '0x514910771af9ca656af840dff83e8264ecf986ca',
+    'AAVE': '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
+    'ZRX': '0xe41d2489571d322189246dafa5ebde1f4699f498',
+    'LEO': '0x2af5d2ad76741191d15dfe7bf6ac92d4bd912ca3',
+    'GMT': '0x7ddc52c4de30e94be3a6a0a2b259b2850f421989',
+    'XAUt': '0x68749665ff8d2d112fa859aa293f07a622782f38',
+    'FLOKI': '0xcf0c122c6b73ff809c693db761e7baebe62b6a2e',
+    'PEPE': '0x6982508145454ce325ddbe47a25d4ec3d2311933',
+    'LIF3': '0x7138eb0d563f3f6722500936a11dcae99d738a2c',
+    'PNK': '0x93ed3fbe21207ec2e8f2d3c3de6e058cb73bc04d',
+    'SPEC': '0xadf7c35560035944e805d98ff17d58cde2449389',
+};
+
+// Mapa de decimals conocidos para tokens populares
+const KNOWN_TOKEN_DECIMALS = {
+    'UNI': 18,
+    'USDT': 6,
+    'USDC': 6,
+    'LINK': 18,
+    'AAVE': 18,
+    'ZRX': 18,
+    'LEO': 18,
+    'GMT': 18,
+    'XAUt': 6,
+    'FLOKI': 18,
+    'PEPE': 18,
+    'LIF3': 18,
+    'PNK': 18,
+    'SPEC': 18,
+};
+
 export async function GET(request) {
     try {
         // Rate limiting
@@ -110,13 +147,20 @@ export async function GET(request) {
                 }
             } else if (tokenTxData.status === '1') {
                 if (process.env.NODE_ENV === 'development') {
-                        console.log(`✅ Token transfers fetched successfully (attempt ${attempt}): ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
+                    console.log(`✅ Token transfers fetched successfully (attempt ${attempt}): ${Array.isArray(tokenTxData.result) ? tokenTxData.result.length : 'N/A'} transactions`);
                     if (Array.isArray(tokenTxData.result) && tokenTxData.result.length > 0) {
-                        console.log('Sample token transfer:', JSON.stringify(tokenTxData.result[0], null, 2));
-                        }
+                        const sample = tokenTxData.result[0];
+                        console.log('Sample token transfer fields:', Object.keys(sample));
+                        console.log('Sample token transfer contract address field:', {
+                            contractAddress: sample.contractAddress,
+                            tokenAddress: sample.tokenAddress,
+                            address: sample.address,
+                            contract: sample.contract
+                        });
                     }
-                    break; // Success, exit retry loop
                 }
+                break; // Success, exit retry loop
+            }
                 
             } catch (error) {
                 const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
@@ -326,6 +370,7 @@ export async function GET(request) {
         const tokensOut = {};
         const tokenDecimals = {};
         const tokenNames = {};
+        const tokenContractAddresses = {}; // Map symbol -> contract address
 
         if (process.env.NODE_ENV === 'development') {
             console.log('Token transfer data status:', tokenTxData.status);
@@ -339,8 +384,16 @@ export async function GET(request) {
         if (tokenTxData.status === '1' && Array.isArray(tokenTxData.result)) {
             let processedCount = 0;
             let filteredCount = 0;
+            let contractAddressCount = 0;
+            let missingContractAddress = [];
             
-            tokenTxData.result.forEach(tx => {
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`\n=== TOKEN TRANSFERS DEBUG ===`);
+                console.log(`Total transactions from Etherscan: ${tokenTxData.result.length}`);
+                console.log(`Time window: ${new Date(oneDayAgo * 1000).toISOString()} to ${new Date(now * 1000).toISOString()}`);
+            }
+            
+            tokenTxData.result.forEach((tx, index) => {
                 const txTime = parseInt(tx.timeStamp);
                 if (txTime < oneDayAgo) {
                     filteredCount++;
@@ -351,9 +404,33 @@ export async function GET(request) {
                 const symbol = tx.tokenSymbol || 'UNKNOWN';
                 const decimals = parseInt(tx.tokenDecimal) || 18;
                 const value = parseFloat(tx.value) / Math.pow(10, decimals);
+                // Try multiple possible field names for contract address (Etherscan V2 API uses 'contractAddress')
+                const contractAddress = tx.contractAddress || tx.tokenAddress || tx.address || tx.contract || null;
+
+                // Debug first few transactions
+                if (process.env.NODE_ENV === 'development' && processedCount <= 3) {
+                    console.log(`\nTransaction ${processedCount}:`);
+                    console.log(`  Symbol: ${symbol}`);
+                    console.log(`  Name: ${tx.tokenName || 'N/A'}`);
+                    console.log(`  Contract Address: ${contractAddress || 'MISSING'}`);
+                    console.log(`  Value (raw): ${tx.value}`);
+                    console.log(`  Value (formatted): ${value}`);
+                    console.log(`  Decimals: ${decimals}`);
+                    console.log(`  From: ${tx.from}`);
+                    console.log(`  To: ${tx.to}`);
+                    console.log(`  Direction: ${tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase() ? 'IN' : 'OUT'}`);
+                    console.log(`  Timestamp: ${new Date(txTime * 1000).toISOString()}`);
+                }
 
                 tokenDecimals[symbol] = decimals;
                 tokenNames[symbol] = tx.tokenName || symbol;
+                // Store contract address for balance fetching (use first occurrence)
+                if (contractAddress && !tokenContractAddresses[symbol]) {
+                    tokenContractAddresses[symbol] = contractAddress;
+                    contractAddressCount++;
+                } else if (!contractAddress && !missingContractAddress.includes(symbol)) {
+                    missingContractAddress.push(symbol);
+                }
 
                 if (tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
                     tokensIn[symbol] = (tokensIn[symbol] || 0) + value;
@@ -363,15 +440,24 @@ export async function GET(request) {
             });
 
             if (process.env.NODE_ENV === 'development') {
+                console.log(`\n=== PROCESSING SUMMARY ===`);
                 console.log(`ERC-20 Tokens processed: ${processedCount} in last 24h, ${filteredCount} filtered (older than 24h)`);
                 console.log(`ERC-20 Tokens found:`, Object.keys(tokensIn).concat(Object.keys(tokensOut)).filter((v, i, a) => a.indexOf(v) === i));
                 console.log(`ERC-20 Tokens IN:`, Object.keys(tokensIn).length, 'symbols');
                 console.log(`ERC-20 Tokens OUT:`, Object.keys(tokensOut).length, 'symbols');
+                console.log(`Contract addresses stored: ${contractAddressCount}`);
+                console.log(`Tokens with contract addresses:`, Object.keys(tokenContractAddresses));
+                if (missingContractAddress.length > 0) {
+                    console.warn(`⚠️ Tokens missing contract address:`, missingContractAddress);
+                }
+                console.log(`========================\n`);
             }
         } else {
             if (process.env.NODE_ENV === 'development') {
                 console.warn('⚠️ Token transfer data not available or invalid format');
                 console.warn('Status:', tokenTxData.status, 'Message:', tokenTxData.message);
+                console.warn('Result type:', typeof tokenTxData.result);
+                console.warn('Result:', tokenTxData.result);
             }
         }
 
@@ -420,10 +506,16 @@ export async function GET(request) {
         // Collect all unique token symbols
         const allSymbols = new Set([...Object.keys(tokensIn), ...Object.keys(tokensOut)]);
         
+        // Add known tokens to allSymbols to ensure we fetch prices for them
+        // This is important for tokens that may have balances but no recent transactions
+        Object.keys(KNOWN_TOKEN_CONTRACTS).forEach(symbol => {
+            allSymbols.add(symbol);
+        });
+        
         if (process.env.NODE_ENV === 'development') {
             console.log('Tokens IN keys:', Object.keys(tokensIn));
             console.log('Tokens OUT keys:', Object.keys(tokensOut));
-            console.log('All symbols collected:', Array.from(allSymbols));
+            console.log('All symbols collected (including known tokens):', Array.from(allSymbols));
             console.log('Tokens IN volumes:', Object.entries(tokensIn).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
             console.log('Tokens OUT volumes:', Object.entries(tokensOut).filter(([k, v]) => v > 0).map(([k, v]) => `${k}:${v}`).join(', '));
         }
@@ -727,6 +819,8 @@ export async function GET(request) {
             const inVolume = tokensIn[symbol] || 0;
             const outVolume = tokensOut[symbol] || 0;
             const price = tokenPrices[symbol] || 0;
+            // Usar contract address de transacciones, o del mapa conocido, o null
+            const contractAddress = tokenContractAddresses[symbol] || KNOWN_TOKEN_CONTRACTS[symbol] || null;
             
             const tokenData = {
                 symbol,
@@ -736,7 +830,12 @@ export async function GET(request) {
                 inVolumeUSD: price > 0 ? inVolume * price : 0,
                 outVolumeUSD: price > 0 ? outVolume * price : 0,
                 price,
+                contractAddress: contractAddress,
             };
+            
+            if (process.env.NODE_ENV === 'development' && (inVolume > 0 || outVolume > 0)) {
+                console.log(`Token ${symbol}: IN=${inVolume.toFixed(4)}, OUT=${outVolume.toFixed(4)}, Price=$${price.toFixed(6)}, Contract=${contractAddress || 'MISSING'}`);
+            }
             
             if (process.env.NODE_ENV === 'development' && (inVolume > 0 || outVolume > 0)) {
                 console.log(`Token ${symbol}: IN=${inVolume}, OUT=${outVolume}, Price=${price}, IN_USD=${tokenData.inVolumeUSD}, OUT_USD=${tokenData.outVolumeUSD}`);
@@ -806,13 +905,207 @@ export async function GET(request) {
             console.log(`========================\n`);
         }
 
+        // Fetch current balances for top tokens
+        const fetchTokenBalance = async (contractAddress, decimals) => {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                // Use V2 API with chainid=1
+                const response = await fetch(
+                    `https://api.etherscan.io/v2/api?module=account&action=tokenbalance&contractaddress=${contractAddress}&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
+                    {
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: { 'Accept': 'application/json' }
+                    }
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`Token balance API HTTP error for ${contractAddress}: ${response.status}`);
+                    }
+                    return null;
+                }
+                
+                const data = await response.json();
+                if (data.status === '1' && data.result) {
+                    const rawBalance = data.result;
+                    const balance = parseFloat(rawBalance) / Math.pow(10, decimals);
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ Balance fetched for contract ${contractAddress}: ${balance.toFixed(6)} (raw: ${rawBalance}, decimals: ${decimals})`);
+                    }
+                    return balance;
+                } else {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`❌ Token balance API error for ${contractAddress}:`, data.message, data.result);
+                        console.warn(`   Response status: ${data.status}, Message: ${data.message}`);
+                    }
+                }
+                return null;
+            } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn(`Error fetching balance for contract ${contractAddress}:`, error.message);
+                }
+                return null;
+            }
+        };
+
+        const fetchETHBalance = async () => {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                // Use V2 API with chainid=1
+                const response = await fetch(
+                    `https://api.etherscan.io/v2/api?module=account&action=balance&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
+                    {
+                        signal: controller.signal,
+                        cache: 'no-store',
+                        headers: { 'Accept': 'application/json' }
+                    }
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`ETH balance API HTTP error: ${response.status}`);
+                    }
+                    return null;
+                }
+                
+                const data = await response.json();
+                if (data.status === '1' && data.result) {
+                    const rawBalance = data.result;
+                    const balance = parseFloat(rawBalance) / 1e18;
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log(`✅ ETH balance fetched: ${balance.toFixed(6)} ETH (raw: ${rawBalance})`);
+                    }
+                    return balance;
+                } else {
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn('❌ ETH balance API error:', data.message, data.result);
+                        console.warn(`   Response status: ${data.status}, Message: ${data.message}`);
+                    }
+                }
+                return null;
+            } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('Error fetching ETH balance:', error.message);
+                }
+                return null;
+            }
+        };
+
+        // Fetch balances in parallel
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`\n=== BALANCE FETCHING DEBUG ===`);
+            console.log(`Fetching balances for ${topTokens.length} tokens`);
+            console.log(`Available prices in tokenPrices:`, Object.keys(tokenPrices).join(', '));
+            topTokens.forEach(t => {
+                console.log(`  ${t.symbol}: price in token=${t.price || 'N/A'}, price in tokenPrices=${tokenPrices[t.symbol] || 'N/A'}`);
+            });
+        }
+        
+        const balancePromises = topTokens.map(async (token) => {
+            let balance = null;
+            let balanceError = null;
+            
+            if (token.symbol === 'ETH') {
+                balance = await fetchETHBalance();
+                if (balance === null) {
+                    balanceError = 'ETH balance fetch failed';
+                }
+            } else {
+                // Usar contract address del token, de transacciones, o del mapa conocido
+                const contractAddress = token.contractAddress || tokenContractAddresses[token.symbol] || KNOWN_TOKEN_CONTRACTS[token.symbol];
+                if (contractAddress) {
+                    // Usar decimals de transacciones, del mapa conocido, o 18 por defecto
+                    const decimals = tokenDecimals[token.symbol] || KNOWN_TOKEN_DECIMALS[token.symbol] || 18;
+                    balance = await fetchTokenBalance(contractAddress, decimals);
+                    if (balance === null) {
+                        balanceError = 'Token balance fetch failed';
+                    }
+                } else {
+                    balanceError = 'No contract address';
+                    if (process.env.NODE_ENV === 'development') {
+                        console.warn(`⚠️ No contract address found for token ${token.symbol}`);
+                        console.warn(`  Available contract addresses:`, Object.keys(tokenContractAddresses));
+                        console.warn(`  Token contractAddress field:`, token.contractAddress);
+                        console.warn(`  Token object keys:`, Object.keys(token));
+                    }
+                }
+            }
+            
+            // Use the price from the token object (already fetched from CoinMarketCap/CoinGecko)
+            // If price is not in token object, try to get it from tokenPrices (fallback)
+            let price = token.price || 0;
+            if (price === 0 && tokenPrices && tokenPrices[token.symbol]) {
+                price = tokenPrices[token.symbol];
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`  ℹ️ Price not in token object, using tokenPrices for ${token.symbol}: $${price}`);
+                }
+            }
+            
+            // Calculate balanceUSD: only if we have both balance > 0 AND price > 0
+            const balanceUSD = (balance !== null && balance !== undefined && balance > 0 && price > 0) 
+                ? balance * price 
+                : 0;
+            
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`Token ${token.symbol}:`);
+                console.log(`  Balance: ${balance !== null && balance !== undefined ? balance.toFixed(6) : 'null'}`);
+                console.log(`  Price: $${price.toFixed(6)} (from token.price: ${token.price || 'N/A'}, from tokenPrices: ${tokenPrices?.[token.symbol] || 'N/A'})`);
+                console.log(`  Balance USD: $${balanceUSD.toFixed(2)}`);
+                if (balanceError) {
+                    console.warn(`  ⚠️ Error: ${balanceError}`);
+                } else if (balance === 0) {
+                    console.log(`  ℹ️ Balance is 0 (wallet has no ${token.symbol})`);
+                } else if (price === 0) {
+                    console.warn(`  ⚠️ Price is 0 (cannot calculate USD value) - token may not be in price fetch list`);
+                }
+            }
+            
+            return {
+                ...token,
+                currentBalance: balance !== null && balance !== undefined ? balance : 0,
+                currentBalanceUSD: balanceUSD,
+                balanceError: balanceError || null
+            };
+        });
+
+        // Wait for all balance fetches to complete
+        const topTokensWithBalances = await Promise.all(balancePromises);
+
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`\n=== FINAL RESPONSE SUMMARY ===`);
+            console.log(`Total tokens in response: ${topTokensWithBalances.length}`);
+            console.log(`Tokens with balances:`, topTokensWithBalances.filter(t => t.currentBalance > 0).length);
+            console.log(`Tokens with balance errors:`, topTokensWithBalances.filter(t => t.balanceError).length);
+            topTokensWithBalances.forEach(t => {
+                console.log(`  ${t.symbol}: IN=$${t.inVolumeUSD?.toFixed(2) || 0}, OUT=$${t.outVolumeUSD?.toFixed(2) || 0}, BAL=$${t.currentBalanceUSD?.toFixed(2) || 0}`);
+            });
+            console.log(`============================\n`);
+        }
+
         return NextResponse.json(
             {
                 address: WALLET_ADDRESS,
                 pendingTxCount,
-                topTokens: topTokens, // Changed from 'tokens' to 'topTokens' to match frontend
-                tokens: topTokens, // Keep for backward compatibility
+                topTokens: topTokensWithBalances, // Changed from 'tokens' to 'topTokens' to match frontend
+                tokens: topTokensWithBalances, // Keep for backward compatibility
                 lastUpdate: new Date().toISOString(),
+                debug: process.env.NODE_ENV === 'development' ? {
+                    contractAddresses: tokenContractAddresses,
+                    tokenDecimals: Object.fromEntries(Object.entries(tokenDecimals).slice(0, 10)), // Limit to first 10
+                    tokenNames: Object.fromEntries(Object.entries(tokenNames).slice(0, 10)), // Limit to first 10
+                    tokensInCount: Object.keys(tokensIn).length,
+                    tokensOutCount: Object.keys(tokensOut).length,
+                    balanceErrors: topTokensWithBalances.filter(t => t.balanceError).map(t => ({ symbol: t.symbol, error: t.balanceError }))
+                } : undefined
             },
             {
                 headers: getRateLimitHeaders(rateLimitResult)

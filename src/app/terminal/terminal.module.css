@@ -209,6 +209,21 @@
     font-weight: bold;
     font-size: 12px;
     letter-spacing: 0.5px;
+    transition: opacity 0.2s ease;
+}
+
+.warningTitle:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+.warningTitle:visited {
+    color: #ffffff;
+}
+
+.warningTitle:hover {
+    opacity: 0.8;
+    text-decoration: underline;
 }
 
 .warningList {
@@ -841,7 +856,7 @@
 
 .walletHeaderRow {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     padding: 6px 10px;
     background: #161b22;
     color: #8b949e;
@@ -858,6 +873,9 @@
 
 .walletHeaderRow span:not(:first-child) {
     text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
 }
 
 .walletHeaderSortable {
@@ -900,13 +918,24 @@
 
 .walletRow {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     padding: 6px 10px;
     border-bottom: 1px solid #30363d;
     font-size: 11px;
     gap: 8px;
     align-items: center;
     transition: background 0.2s ease;
+}
+
+.walletRow span:first-child {
+    text-align: left;
+}
+
+.walletRow span:not(:first-child) {
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
 }
 
 /* Zebra striping for wallet rows */
@@ -944,6 +973,11 @@
 
 .walletVol {
     color: #f0883e;
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
 }
 
 .walletStatus {
@@ -1172,6 +1206,145 @@
 
     100% {
         border-color: #f85149;
+    }
+}
+
+/* Card View Styles for Mobile */
+.cardView {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 8px;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.marketCard {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.marketCard:hover {
+    background: #21262d;
+    border-color: #58a6ff;
+}
+
+.marketCard:active {
+    background: #1c2128;
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #30363d;
+}
+
+.cardSymbol {
+    color: #58a6ff;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cardPrice {
+    color: #e6edf3;
+    font-weight: bold;
+    font-size: 16px;
+    text-align: right;
+}
+
+.cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cardRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+
+.cardLabel {
+    color: #8b949e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cardValue {
+    color: #8b949e;
+    font-weight: 500;
+}
+
+.cardStatus {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #30363d;
+}
+
+.cardStatusItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+
+/* Classic Theme Card Styles */
+.terminalBody[data-theme="classic"] .marketCard {
+    background: #fff;
+    border: 1px solid #331a00;
+}
+
+.terminalBody[data-theme="classic"] .marketCard:hover {
+    background: #fff8e1;
+    border-color: #ff9900;
+}
+
+.terminalBody[data-theme="classic"] .cardHeader {
+    border-bottom: 1px solid #331a00;
+}
+
+.terminalBody[data-theme="classic"] .cardSymbol {
+    color: #000;
+}
+
+.terminalBody[data-theme="classic"] .cardPrice {
+    color: #000;
+}
+
+.terminalBody[data-theme="classic"] .cardLabel {
+    color: #666;
+}
+
+.terminalBody[data-theme="classic"] .cardValue {
+    color: #000;
+}
+
+.terminalBody[data-theme="classic"] .cardStatus {
+    border-top: 1px solid #331a00;
+}
+
+/* Tablet and Desktop: Hide card view */
+@media (min-width: 769px) {
+    .cardView {
+        display: none;
     }
 }
 
@@ -1410,6 +1583,15 @@
 }
 
 .terminalBody[data-theme="classic"] .warningTitle {
+    color: #000;
+}
+
+.terminalBody[data-theme="classic"] .warningTitle:hover {
+    color: #ff9900;
+    opacity: 1;
+}
+
+.terminalBody[data-theme="classic"] .warningTitle:visited {
     color: #000;
 }
 

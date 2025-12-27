@@ -13,11 +13,19 @@ ETHERSCAN_API_KEY=your_etherscan_api_key
 COINMARKETCAP_API_KEY=your_coinmarketcap_api_key
 
 # Supabase (for column suggestions and data storage)
+# Project: Francisco's project > bfxterminal
+# See SUPABASE_SETUP_GUIDE.md for detailed setup instructions
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Optional: For client-side Supabase operations
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 **Note**: If `COINMARKETCAP_API_KEY` is not set, the application will automatically use CoinGecko as a fallback (no API key required, but limited token support).
+
+**Supabase Setup**: See [SUPABASE_SETUP_GUIDE.md](./SUPABASE_SETUP_GUIDE.md) for detailed instructions on configuring Supabase for the bfxterminal project.
 
 ## Getting Started
 

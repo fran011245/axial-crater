@@ -3,6 +3,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Search, X, Pin, Plus } from 'lucide-react';
 import styles from '../../app/terminal/terminal.module.css';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import MarketCard from './MarketCard';
+
+// Helper function to open external links in a new tab safely
+const openExternalLink = (url) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+};
 
 // Helper function to get Bitfinex trading URL
 const getBitfinexTradingUrl = (symbol, pairUrlMap) => {
@@ -189,10 +196,8 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
                             <div key={p.symbol} className={styles.warningRow}>
                                 <span 
                                     className={styles.warnSymbol}
-                                    onClick={() => window.open(
-                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap), 
-                                        '_blank', 
-                                        'noopener,noreferrer'
+                                    onClick={() => openExternalLink(
+                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap)
                                     )}
                                     style={{ cursor: 'pointer' }}
                                 >
@@ -221,10 +226,14 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
     );
 };
 
-// Column Suggestion Dialog Component
+// Column Suggestion Dialog Component (now also supports general feedback)
 const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => {
+    const [dialogType, setDialogType] = useState('column'); // 'column' or 'feedback'
     const [columnName, setColumnName] = useState("");
     const [description, setDescription] = useState("");
+    const [feedbackMessage, setFeedbackMessage] = useState("");
+    const [feedbackType, setFeedbackType] = useState('general');
+    const [userEmail, setUserEmail] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [submitError, setSubmitError] = useState(null);
@@ -250,29 +259,52 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        if (!columnName.trim()) {
-            return;
+        if (dialogType === 'column') {
+            if (!columnName.trim()) {
+                return;
+            }
+        } else {
+            if (!feedbackMessage.trim()) {
+                return;
+            }
         }
 
         setIsSubmitting(true);
         setSubmitError(null);
         
         try {
-            const response = await fetch('/api/column-suggestions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    columnName: columnName.trim(),
-                    description: description.trim() || null
-                })
-            });
+            let response;
+            if (dialogType === 'column') {
+                // Submit column suggestion
+                response = await fetch('/api/column-suggestions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        columnName: columnName.trim(),
+                        description: description.trim() || null
+                    })
+                });
+            } else {
+                // Submit general feedback
+                response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: feedbackMessage.trim(),
+                        feedbackType: feedbackType,
+                        userEmail: userEmail.trim() || null
+                    })
+                });
+            }
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to submit suggestion');
+                throw new Error(data.error || 'Failed to submit');
             }
 
             // Success
@@ -283,13 +315,16 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
             setTimeout(() => {
                 setColumnName("");
                 setDescription("");
+                setFeedbackMessage("");
+                setUserEmail("");
+                setFeedbackType('general');
                 setSubmitSuccess(false);
                 setSubmitError(null);
                 onClose();
             }, 2000);
         } catch (error) {
-            console.error('Error submitting suggestion:', error);
-            setSubmitError(error.message || 'Failed to submit suggestion. Please try again.');
+            console.error('Error submitting:', error);
+            setSubmitError(error.message || 'Failed to submit. Please try again.');
             setIsSubmitting(false);
         }
     };
@@ -298,7 +333,11 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
         if (!isSubmitting) {
             setColumnName("");
             setDescription("");
+            setFeedbackMessage("");
+            setUserEmail("");
+            setFeedbackType('general');
             setSubmitSuccess(false);
+            setSubmitError(null);
             onClose();
         }
     };
@@ -310,7 +349,9 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
             <div className={styles.suggestionDialogBackdrop} onClick={handleClose} />
             <div className={styles.suggestionDialog}>
                 <div className={styles.suggestionDialogHeader}>
-                    <span className={styles.suggestionDialogTitle}>SUGGEST A NEW COLUMN / STAT</span>
+                    <span className={styles.suggestionDialogTitle}>
+                        {dialogType === 'column' ? 'SUGGEST A NEW COLUMN / STAT' : 'SEND FEEDBACK'}
+                    </span>
                     <button 
                         className={styles.suggestionDialogCloseButton} 
                         onClick={handleClose}
@@ -321,34 +362,117 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
                     </button>
                 </div>
                 <form className={styles.suggestionDialogForm} onSubmit={handleSubmit}>
+                    {/* Type selector */}
                     <div className={styles.suggestionDialogField}>
-                        <label className={styles.suggestionDialogLabel}>
-                            COLUMN_NAME / STAT_NAME *
-                        </label>
-                        <input
-                            type="text"
-                            className={styles.suggestionDialogInput}
-                            value={columnName}
-                            onChange={(e) => setColumnName(e.target.value)}
-                            placeholder="E.G., LIQUIDITY_SCORE, MARKET_CAP, ETC."
-                            required
-                            disabled={isSubmitting || submitSuccess}
-                            autoFocus
-                        />
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                            <button
+                                type="button"
+                                className={`${styles.suggestionDialogButton} ${dialogType === 'column' ? styles.suggestionDialogButtonPrimary : ''}`}
+                                onClick={() => {
+                                    setDialogType('column');
+                                    setSubmitError(null);
+                                }}
+                                disabled={isSubmitting || submitSuccess}
+                                style={{ flex: 1, fontSize: '10px', padding: '6px 12px' }}
+                            >
+                                COLUMN SUGGESTION
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.suggestionDialogButton} ${dialogType === 'feedback' ? styles.suggestionDialogButtonPrimary : ''}`}
+                                onClick={() => {
+                                    setDialogType('feedback');
+                                    setSubmitError(null);
+                                }}
+                                disabled={isSubmitting || submitSuccess}
+                                style={{ flex: 1, fontSize: '10px', padding: '6px 12px' }}
+                            >
+                                FEEDBACK
+                            </button>
+                        </div>
                     </div>
-                    <div className={styles.suggestionDialogField}>
-                        <label className={styles.suggestionDialogLabel}>
-                            DESCRIPTION / USE_CASE
-                        </label>
-                        <textarea
-                            className={styles.suggestionDialogTextarea}
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="DESCRIBE WHAT THIS COLUMN WOULD SHOW AND WHY IT WOULD BE USEFUL..."
-                            rows={6}
-                            disabled={isSubmitting || submitSuccess}
-                        />
-                    </div>
+
+                    {dialogType === 'column' ? (
+                        <>
+                            <div className={styles.suggestionDialogField}>
+                                <label className={styles.suggestionDialogLabel}>
+                                    COLUMN_NAME / STAT_NAME *
+                                </label>
+                                <input
+                                    type="text"
+                                    className={styles.suggestionDialogInput}
+                                    value={columnName}
+                                    onChange={(e) => setColumnName(e.target.value)}
+                                    placeholder="E.G., LIQUIDITY_SCORE, MARKET_CAP, ETC."
+                                    required
+                                    disabled={isSubmitting || submitSuccess}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className={styles.suggestionDialogField}>
+                                <label className={styles.suggestionDialogLabel}>
+                                    DESCRIPTION / USE_CASE
+                                </label>
+                                <textarea
+                                    className={styles.suggestionDialogTextarea}
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="DESCRIBE WHAT THIS COLUMN WOULD SHOW AND WHY IT WOULD BE USEFUL..."
+                                    rows={6}
+                                    disabled={isSubmitting || submitSuccess}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className={styles.suggestionDialogField}>
+                                <label className={styles.suggestionDialogLabel}>
+                                    FEEDBACK TYPE
+                                </label>
+                                <select
+                                    className={styles.suggestionDialogInput}
+                                    value={feedbackType}
+                                    onChange={(e) => setFeedbackType(e.target.value)}
+                                    disabled={isSubmitting || submitSuccess}
+                                    style={{ textTransform: 'uppercase' }}
+                                >
+                                    <option value="general">GENERAL</option>
+                                    <option value="bug">BUG REPORT</option>
+                                    <option value="feature">FEATURE REQUEST</option>
+                                    <option value="suggestion">SUGGESTION</option>
+                                    <option value="other">OTHER</option>
+                                </select>
+                            </div>
+                            <div className={styles.suggestionDialogField}>
+                                <label className={styles.suggestionDialogLabel}>
+                                    MESSAGE *
+                                </label>
+                                <textarea
+                                    className={styles.suggestionDialogTextarea}
+                                    value={feedbackMessage}
+                                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                                    placeholder="SHARE YOUR FEEDBACK, SUGGESTIONS, OR REPORT ISSUES..."
+                                    rows={6}
+                                    required
+                                    disabled={isSubmitting || submitSuccess}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className={styles.suggestionDialogField}>
+                                <label className={styles.suggestionDialogLabel}>
+                                    EMAIL (OPTIONAL)
+                                </label>
+                                <input
+                                    type="email"
+                                    className={styles.suggestionDialogInput}
+                                    value={userEmail}
+                                    onChange={(e) => setUserEmail(e.target.value)}
+                                    placeholder="YOUR_EMAIL@EXAMPLE.COM"
+                                    disabled={isSubmitting || submitSuccess}
+                                />
+                            </div>
+                        </>
+                    )}
                     {submitError && (
                         <div className={styles.suggestionDialogError}>
                             ERROR: {submitError}
@@ -356,7 +480,7 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
                     )}
                     {submitSuccess ? (
                         <div className={styles.suggestionDialogSuccess}>
-                            ✓ SUGGESTION SUBMITTED SUCCESSFULLY
+                            ✓ {dialogType === 'column' ? 'SUGGESTION' : 'FEEDBACK'} SUBMITTED SUCCESSFULLY
                         </div>
                     ) : (
                         <div className={styles.suggestionDialogActions}>
@@ -371,7 +495,10 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
                             <button
                                 type="submit"
                                 className={`${styles.suggestionDialogButton} ${styles.suggestionDialogButtonPrimary}`}
-                                disabled={isSubmitting || !columnName.trim()}
+                                disabled={
+                                    isSubmitting || 
+                                    (dialogType === 'column' ? !columnName.trim() : !feedbackMessage.trim())
+                                }
                             >
                                 {isSubmitting ? 'SUBMITTING...' : 'SUBMIT'}
                             </button>
@@ -384,6 +511,7 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
 };
 
 export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => {
+    const { isMobile } = useIsMobile();
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);
@@ -803,102 +931,134 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                     </button>
                 </div>
             )}
-            <div className={styles.tableHeader}>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('symbol')}>
-                    SYMBOL
-                    {sortBySymbol && <span className={styles.sortArrow}>{sortBySymbol === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('last')}>
-                    LAST
-                    {sortByLast && <span className={styles.sortArrow}>{sortByLast === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('sd')}>
-                    SD
-                    {sortBySD && <span className={styles.sortArrow}>{sortBySD === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('spread')}>
-                    SPREAD
-                    {sortBySpread && <span className={styles.sortArrow}>{sortBySpread === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('24hvol')}>
-                    24H_VOL
-                    {sortBy24HVol && <span className={styles.sortArrow}>{sortBy24HVol === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('7dvol')}>
-                    7D_VOL
-                    {sortBy7DVol && <span className={styles.sortArrow}>{sortBy7DVol === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('30dvol')}>
-                    30D_VOL
-                    {sortBy30DVol && <span className={styles.sortArrow}>{sortBy30DVol === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('d')}>
-                    D
-                    {sortByD && <span className={styles.sortArrow}>{sortByD === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span className={styles.tableHeaderSortable} onClick={() => handleSort('w')}>
-                    W
-                    {sortByW && <span className={styles.sortArrow}>{sortByW === 'desc' ? '↓' : '↑'}</span>}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <button
-                        className={styles.suggestionButton}
-                        onClick={() => setIsSuggestionDialogOpen(true)}
-                        title="Suggest a new column"
-                        aria-label="Suggest a new column"
-                    >
-                        <Plus size={14} />
-                    </button>
-                </span>
-            </div>
-            <div className={styles.scrollList} style={{ flex: 1, overflow: 'auto' }}>
-                {sortedPairs.length > 0 ? (
-                    sortedPairs.map((p) => {
-                        const st = getMovementStatus(p.symbol);
-                        return (
-                            <div key={p.symbol} className={styles.tableRow}>
-                                <span 
-                                    className={styles.colSymbol}
-                                    onClick={() => window.open(
-                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap), 
-                                        '_blank', 
-                                        'noopener,noreferrer'
+            {isMobile ? (
+                /* Card View for Mobile */
+                <div className={styles.cardView}>
+                    {sortedPairs.length > 0 ? (
+                        sortedPairs.map((p) => {
+                            const st = getMovementStatus(p.symbol);
+                            return (
+                                <MarketCard
+                                    key={p.symbol}
+                                    pair={p}
+                                    onClick={() => openExternalLink(
+                                        getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap)
                                     )}
-                                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                                >
-                                    {p.symbol}
-                                    {getTrendIndicator(p.symbol)}
-                                </span>
-                                <span className={styles.colPrice}>{p.lastPrice.toFixed(2)}</span>
-                                <span className={p.change >= 0 ? styles.gain : styles.loss}>
-                                    {p.change > 0 ? '+' : ''}{(p.change * 100).toFixed(2)}%
-                                </span>
-                                <span className={styles.colVol}>
-                                    {p.spreadPercent !== undefined ? `${p.spreadPercent.toFixed(2)}%` : '---'}
-                                </span>
-                                <span className={styles.colVol}>{fmtVals(p.volumeUSD)}</span>
-                                <span className={styles.colVol}>{fmtVals(p.vol7d)}</span>
-                                <span className={styles.colVol}>{fmtVals(p.vol30d)}</span>
-                                <span className={
-                                    st.d === 'OK' ? styles.statusOk : 
-                                    st.d === 'CLSD' ? styles.statusErr : 
-                                    styles.statusNa
-                                }>{st.d}</span>
-                                <span className={
-                                    st.w === 'OK' ? styles.statusOk : 
-                                    st.w === 'CLSD' ? styles.statusErr : 
-                                    styles.statusNa
-                                }>{st.w}</span>
-                                <span></span>
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div className={styles.tableRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>
-                        {searchQuery ? 'NO MATCHES' : 'LOADING...'}
+                                    isClassicTheme={isClassicTheme}
+                                    movementStatus={st}
+                                    trendIndicator={getTrendIndicator(p.symbol)}
+                                />
+                            );
+                        })
+                    ) : (
+                        <div style={{ 
+                            padding: '20px', 
+                            textAlign: 'center', 
+                            color: isClassicTheme ? '#888' : '#8b949e' 
+                        }}>
+                            {searchQuery ? 'NO MATCHES' : 'LOADING...'}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                /* Table View for Desktop/Tablet */
+                <>
+                    <div className={styles.tableHeader}>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('symbol')}>
+                            SYMBOL
+                            {sortBySymbol && <span className={styles.sortArrow}>{sortBySymbol === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('last')}>
+                            LAST
+                            {sortByLast && <span className={styles.sortArrow}>{sortByLast === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('sd')}>
+                            SD
+                            {sortBySD && <span className={styles.sortArrow}>{sortBySD === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('spread')}>
+                            SPREAD
+                            {sortBySpread && <span className={styles.sortArrow}>{sortBySpread === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('24hvol')}>
+                            24H_VOL
+                            {sortBy24HVol && <span className={styles.sortArrow}>{sortBy24HVol === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('7dvol')}>
+                            7D_VOL
+                            {sortBy7DVol && <span className={styles.sortArrow}>{sortBy7DVol === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('30dvol')}>
+                            30D_VOL
+                            {sortBy30DVol && <span className={styles.sortArrow}>{sortBy30DVol === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('d')}>
+                            D
+                            {sortByD && <span className={styles.sortArrow}>{sortByD === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('w')}>
+                            W
+                            {sortByW && <span className={styles.sortArrow}>{sortByW === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button
+                                className={styles.suggestionButton}
+                                onClick={() => setIsSuggestionDialogOpen(true)}
+                                title="Suggest a new column"
+                                aria-label="Suggest a new column"
+                            >
+                                <Plus size={14} />
+                            </button>
+                        </span>
                     </div>
-                )}
-            </div>
+                    <div className={styles.scrollList} style={{ flex: 1, overflow: 'auto' }}>
+                        {sortedPairs.length > 0 ? (
+                            sortedPairs.map((p) => {
+                                const st = getMovementStatus(p.symbol);
+                                return (
+                                    <div key={p.symbol} className={styles.tableRow}>
+                                        <span 
+                                            className={styles.colSymbol}
+                                            onClick={() => openExternalLink(
+                                                getBitfinexTradingUrl(p.symbol, volume?.pairUrlMap)
+                                            )}
+                                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                        >
+                                            {p.symbol}
+                                            {getTrendIndicator(p.symbol)}
+                                        </span>
+                                        <span className={styles.colPrice}>{p.lastPrice.toFixed(2)}</span>
+                                        <span className={p.change >= 0 ? styles.gain : styles.loss}>
+                                            {p.change > 0 ? '+' : ''}{(p.change * 100).toFixed(2)}%
+                                        </span>
+                                        <span className={styles.colVol}>
+                                            {p.spreadPercent !== undefined ? `${p.spreadPercent.toFixed(2)}%` : '---'}
+                                        </span>
+                                        <span className={styles.colVol}>{fmtVals(p.volumeUSD)}</span>
+                                        <span className={styles.colVol}>{fmtVals(p.vol7d)}</span>
+                                        <span className={styles.colVol}>{fmtVals(p.vol30d)}</span>
+                                        <span className={
+                                            st.d === 'OK' ? styles.statusOk : 
+                                            st.d === 'CLSD' ? styles.statusErr : 
+                                            styles.statusNa
+                                        }>{st.d}</span>
+                                        <span className={
+                                            st.w === 'OK' ? styles.statusOk : 
+                                            st.w === 'CLSD' ? styles.statusErr : 
+                                            styles.statusNa
+                                        }>{st.w}</span>
+                                        <span></span>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className={styles.tableRow} style={{ justifyContent: 'center', color: isClassicTheme ? '#888' : '#8b949e' }}>
+                                {searchQuery ? 'NO MATCHES' : 'LOADING...'}
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
             <ColumnSuggestionDialog 
                 isOpen={isSuggestionDialogOpen} 
                 onClose={() => setIsSuggestionDialogOpen(false)}
@@ -911,12 +1071,14 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
 export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
     const [sortByInVolume, setSortByInVolume] = useState(null); // 'desc' | 'asc' | null
     const [sortByOutVolume, setSortByOutVolume] = useState(null); // 'desc' | 'asc' | null
+    const [sortByBalance, setSortByBalance] = useState(null); // 'desc' | 'asc' | null
 
     const handleSort = (column) => {
         if (column === 'in') {
             if (sortByInVolume === null) {
                 setSortByInVolume('desc');
                 setSortByOutVolume(null);
+                setSortByBalance(null);
             } else if (sortByInVolume === 'desc') {
                 setSortByInVolume('asc');
             } else {
@@ -926,10 +1088,21 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
             if (sortByOutVolume === null) {
                 setSortByOutVolume('desc');
                 setSortByInVolume(null);
+                setSortByBalance(null);
             } else if (sortByOutVolume === 'desc') {
                 setSortByOutVolume('asc');
             } else {
                 setSortByOutVolume(null); // Volver a orden original
+            }
+        } else if (column === 'balance') {
+            if (sortByBalance === null) {
+                setSortByBalance('desc');
+                setSortByInVolume(null);
+                setSortByOutVolume(null);
+            } else if (sortByBalance === 'desc') {
+                setSortByBalance('asc');
+            } else {
+                setSortByBalance(null); // Volver a orden original
             }
         }
     };
@@ -973,6 +1146,12 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                 const valB = b.outVolumeUSD || b.outVolume || 0;
                 return sortByOutVolume === 'desc' ? valB - valA : valA - valB;
             });
+        } else if (sortByBalance) {
+            otherTokens.sort((a, b) => {
+                const valA = a.currentBalanceUSD || a.currentBalance || 0;
+                const valB = b.currentBalanceUSD || b.currentBalance || 0;
+                return sortByBalance === 'desc' ? valB - valA : valA - valB;
+            });
         } else {
             // Default: ordenar por volumen IN descendente (mayor a menor)
             otherTokens.sort((a, b) => {
@@ -984,12 +1163,21 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
         
         // ETH primero si existe, luego los demás
         return ethToken ? [ethToken, ...otherTokens] : otherTokens;
-    }, [walletData?.topTokens, sortByInVolume, sortByOutVolume]);
+    }, [walletData?.topTokens, sortByInVolume, sortByOutVolume, sortByBalance]);
 
     return (
         <section className={styles.sectorW} style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className={styles.warningHeader}>
-                <span className={styles.warningTitle}>{">> HOT_WALLET_FLOWS [ETH]"}</span>
+                <a 
+                    href="https://etherscan.io/address/0x77134cbC06cB00b66F4c7e623D5fdBF6777635EC"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.warningTitle}
+                    style={{ textDecoration: 'none', cursor: 'pointer' }}
+                    title="View wallet on Etherscan"
+                >
+                    {">> HOT_WALLET_FLOWS [ETH]"}
+                </a>
                 <div className={styles.walletStatus}>
                     <span className={styles.label}>STATE:</span>
                     <span className={walletData?.status === 'WARNING' ? styles.statusWarn : styles.statusOk}>
@@ -1004,7 +1192,7 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                         className={styles.walletHeaderSortable}
                         onClick={() => handleSort('in')}
                     >
-                        IN_VOL_24H
+                        IN_24H
                         {sortByInVolume && (
                             <span className={styles.sortArrow}>
                                 {sortByInVolume === 'desc' ? '↓' : '↑'}
@@ -1015,10 +1203,21 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                         className={styles.walletHeaderSortable}
                         onClick={() => handleSort('out')}
                     >
-                        OUT_VOL_24H
+                        OUT_24H
                         {sortByOutVolume && (
                             <span className={styles.sortArrow}>
                                 {sortByOutVolume === 'desc' ? '↓' : '↑'}
+                            </span>
+                        )}
+                    </span>
+                    <span 
+                        className={styles.walletHeaderSortable}
+                        onClick={() => handleSort('balance')}
+                    >
+                        BAL
+                        {sortByBalance && (
+                            <span className={styles.sortArrow}>
+                                {sortByBalance === 'desc' ? '↓' : '↑'}
                             </span>
                         )}
                     </span>
@@ -1026,36 +1225,31 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                 <div className={styles.walletList}>
                     {sortedTokens.length > 0 ? (
                         sortedTokens.map(t => {
-                            // Format volumes: show USD if available and > 0, otherwise raw token amount
-                            const formatVolume = (volume, usdVolume) => {
-                                // If we have USD volume and it's greater than 0, show it
-                                if (usdVolume !== null && usdVolume !== undefined && usdVolume > 0) {
-                                    return `$${Math.floor(usdVolume).toLocaleString()}`;
+                            // Format currency with $ sign and K/M/B notation
+                            const formatCurrency = (value) => {
+                                if (value === null || value === undefined || value === 0) {
+                                    return '$0';
                                 }
                                 
-                                // If no USD but we have raw volume, show raw volume with formatting
-                                if (volume !== null && volume !== undefined && volume > 0) {
-                                    // Format large numbers for readability
-                                    if (volume >= 1000000) {
-                                        return `${(volume / 1000000).toFixed(2)}M`;
-                                    }
-                                    if (volume >= 1000) {
-                                        return `${(volume / 1000).toFixed(2)}K`;
-                                    }
-                                    return Math.floor(volume).toLocaleString();
+                                const absValue = Math.abs(value);
+                                
+                                if (absValue >= 1000000000) {
+                                    return `$${(value / 1000000000).toFixed(2)}B`;
+                                }
+                                if (absValue >= 1000000) {
+                                    return `$${(value / 1000000).toFixed(2)}M`;
+                                }
+                                if (absValue >= 1000) {
+                                    return `$${(value / 1000).toFixed(2)}K`;
                                 }
                                 
-                                // If no volume at all, show 0
-                                return '0';
+                                return `$${Math.floor(value).toLocaleString()}`;
                             };
 
-                            const inDisplay = formatVolume(t.inVolume ?? 0, t.inVolumeUSD ?? null);
-                            const outDisplay = formatVolume(t.outVolume ?? 0, t.outVolumeUSD ?? null);
+                            const inDisplay = formatCurrency(t.inVolumeUSD ?? 0);
+                            const outDisplay = formatCurrency(t.outVolumeUSD ?? 0);
+                            const balanceDisplay = formatCurrency(t.currentBalanceUSD ?? 0);
                             
-                            // Check if price is available for tooltip
-                            const hasPrice = (t.inVolumeUSD !== null && t.inVolumeUSD !== undefined && t.inVolumeUSD > 0) ||
-                                           (t.outVolumeUSD !== null && t.outVolumeUSD !== undefined && t.outVolumeUSD > 0);
-
                             return (
                                 <div key={t.symbol} className={styles.walletRow}>
                                     <span className={styles.walletSymbol}>
@@ -1064,23 +1258,14 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                                             <Pin size={10} className={styles.pinIcon} />
                                         )}
                                     </span>
-                                    <span 
-                                        className={styles.walletVol}
-                                        title={!hasPrice && (t.inVolume > 0) ? 'Price not available - showing raw volume' : undefined}
-                                    >
+                                    <span className={styles.walletVol}>
                                         {inDisplay}
-                                        {!hasPrice && t.inVolume > 0 && (
-                                            <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '2px' }}>raw</span>
-                                        )}
                                     </span>
-                                    <span 
-                                        className={styles.walletVol}
-                                        title={!hasPrice && (t.outVolume > 0) ? 'Price not available - showing raw volume' : undefined}
-                                    >
+                                    <span className={styles.walletVol}>
                                         {outDisplay}
-                                        {!hasPrice && t.outVolume > 0 && (
-                                            <span style={{ fontSize: '9px', opacity: 0.6, marginLeft: '2px' }}>raw</span>
-                                        )}
+                                    </span>
+                                    <span className={styles.walletVol}>
+                                        {balanceDisplay}
                                     </span>
                                 </div>
                             );

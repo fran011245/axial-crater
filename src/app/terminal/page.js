@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import styles from './terminal.module.css';
 import { NetworkVitals, MarketScanner, WalletMonitor, StatusFeed, LiquidityRiskMonitor, FundingStats } from '../../components/terminal/TerminalWidgets';
 import TokenDetailWidget from '../../components/terminal/TokenDetailWidget';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import dynamic from 'next/dynamic';
 const DraggableGrid = dynamic(() => import('../../components/terminal/DraggableGrid'), { ssr: false });
 
@@ -12,7 +13,9 @@ export default function TerminalPage() {
     const [status, setStatus] = useState(null);
     const [volume, setVolume] = useState(null);
     const [movements, setMovements] = useState([]);
-    const [currentTime, setCurrentTime] = useState("");
+    const [utcTime, setUtcTime] = useState("");
+    const [localTime, setLocalTime] = useState("");
+    const [currentDate, setCurrentDate] = useState("");
     const [walletData, setWalletData] = useState(null);
     const [fundingData, setFundingData] = useState(null);
     const [tokenWidgets, setTokenWidgets] = useState([]); // Array of { id, token }
@@ -62,8 +65,8 @@ export default function TerminalPage() {
         ],
         xs: [
             { i: 'vitals', x: 0, y: 0, w: 4, h: 1.5, minW: 2, minH: 1 },
-            { i: 'liquidity', x: 0, y: 1.5, w: 4, h: 2, minW: 2, minH: 1.5 },
-            { i: 'market', x: 0, y: 3.5, w: 4, h: 4.1, minW: 4, minH: 3 },
+            { i: 'market', x: 0, y: 1.5, w: 4, h: 4.1, minW: 4, minH: 3 },
+            { i: 'liquidity', x: 0, y: 5.6, w: 4, h: 2, minW: 2, minH: 1.5 },
             { i: 'wallet', x: 0, y: 7.6, w: 4, h: 2.5, minW: 2, minH: 1 },
             { i: 'feed', x: 0, y: 12.1, w: 4, h: 2.0, minW: 4, minH: 1.5 },
             { i: 'funding', x: 0, y: 14.1, w: 4, h: 2, minW: 2, minH: 1.5 }
@@ -96,7 +99,8 @@ export default function TerminalPage() {
                         minW: 1.5,
                         maxW: 1.5,
                         minH: 0.8,
-                        maxH: 1.2
+                        maxH: 1.2,
+                        static: isMobile && bp === 'xs' // Static in mobile
                     });
                 } else {
                     // For smaller screens, stack vertically
@@ -107,15 +111,24 @@ export default function TerminalPage() {
                         w: bp === 'sm' ? 6 : 4,
                         h: 1.0,
                         minW: 2,
-                        minH: 0.8
+                        minH: 0.8,
+                        static: isMobile && bp === 'xs' // Static in mobile
                     });
                 }
             });
+            
+            // Make all base layouts static in mobile (xs breakpoint)
+            if (isMobile && bp === 'xs') {
+                base.forEach(item => {
+                    item.static = true;
+                });
+            }
+            
             layouts[bp] = base;
         });
         
         return layouts;
-    }, [tokenWidgets]);
+    }, [tokenWidgets, isMobile]);
 
     useEffect(() => {
         // Mark component as mounted to avoid hydration mismatch
@@ -140,7 +153,22 @@ export default function TerminalPage() {
         // Set initial time immediately
         const updateTime = () => {
             const now = new Date();
-            setCurrentTime(now.toLocaleTimeString('en-US', { hour12: false }) + " " + now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase());
+            
+            // UTC time
+            setUtcTime(now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                timeZone: 'UTC' 
+            }));
+            
+            // Local time
+            setLocalTime(now.toLocaleTimeString('en-US', { hour12: false }));
+            
+            // Date
+            setCurrentDate(now.toLocaleDateString('en-US', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: '2-digit' 
+            }).toUpperCase());
         };
         updateTime();
         
@@ -241,6 +269,9 @@ export default function TerminalPage() {
                 <div className={styles.brand}>BFX_TERM // v1.0.5</div>
                 <div className={styles.marquee} suppressHydrationWarning>{status?.status ? `SYS.MSG: ${status.status.toUpperCase()}` : "SYS.MSG: CONNECTING..."}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? utcTime : "---"}
+                    </div>
                     <button 
                         onClick={toggleTheme}
                         className={styles.themeToggle}
@@ -248,7 +279,12 @@ export default function TerminalPage() {
                     >
                         {isClassicTheme ? '◐' : '◑'}
                     </button>
-                    <div className={styles.clock} suppressHydrationWarning>{isMounted ? currentTime : "---"}</div>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? localTime : "---"}
+                    </div>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? currentDate : "---"}
+                    </div>
                 </div>
             </header>
 
@@ -260,8 +296,8 @@ export default function TerminalPage() {
                 rowHeight={100}
                 margin={[4, 4]}
                 containerPadding={[0, 0]}
-                isDraggable={true}
-                isResizable={true}
+                isDraggable={!isMobile}
+                isResizable={!isMobile}
                 draggableHandle=".drag-handle"
                 resizeHandles={['s', 'se']}
             >
