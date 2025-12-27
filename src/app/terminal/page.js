@@ -299,8 +299,8 @@ export default function TerminalPage() {
                 rowHeight={100}
                 margin={[4, 4]}
                 containerPadding={[0, 0]}
-                isDraggable={!isMobile}
-                isResizable={!isMobile}
+                isDraggable={typeof isMobile !== 'undefined' ? !isMobile : true}
+                isResizable={typeof isMobile !== 'undefined' ? !isMobile : true}
                 draggableHandle=".drag-handle"
                 resizeHandles={['s', 'se']}
             >
