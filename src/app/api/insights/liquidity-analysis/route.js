@@ -21,11 +21,24 @@ export async function GET(request) {
             );
         }
 
+        // Return empty data gracefully when Supabase isn't configured
         if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-            return NextResponse.json(
-                { error: 'Server configuration error' },
-                { status: 500 }
-            );
+            return NextResponse.json({
+                success: true,
+                data: [],
+                aggregate_stats: {
+                    total_pairs_analyzed: 0,
+                    avg_spread_all_pairs: 0,
+                    pairs_with_poor_liquidity: 0,
+                    pairs_with_moderate_liquidity: 0,
+                    pairs_with_good_liquidity: 0
+                },
+                period_hours: 24,
+                timestamp: new Date().toISOString(),
+                message: 'Insights not available - database not configured'
+            }, {
+                headers: getRateLimitHeaders(rateLimitResult)
+            });
         }
 
         const { searchParams } = new URL(request.url);
@@ -164,11 +177,23 @@ export async function GET(request) {
         });
 
     } catch (error) {
-        console.error('Error fetching liquidity analysis:', error);
-        return NextResponse.json(
-            { error: 'Failed to fetch liquidity analysis' },
-            { status: 500 }
-        );
+        if (process.env.NODE_ENV === 'development') {
+            console.error('Error fetching liquidity analysis:', error);
+        }
+        return NextResponse.json({
+            success: true,
+            data: [],
+            aggregate_stats: {
+                total_pairs_analyzed: 0,
+                avg_spread_all_pairs: 0,
+                pairs_with_poor_liquidity: 0,
+                pairs_with_moderate_liquidity: 0,
+                pairs_with_good_liquidity: 0
+            },
+            period_hours: 24,
+            timestamp: new Date().toISOString(),
+            message: 'Insights temporarily unavailable'
+        });
     }
 }
 

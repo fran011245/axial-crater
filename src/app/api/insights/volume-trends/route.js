@@ -21,11 +21,17 @@ export async function GET(request) {
             );
         }
 
+        // Return empty data gracefully when Supabase isn't configured
         if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-            return NextResponse.json(
-                { error: 'Server configuration error' },
-                { status: 500 }
-            );
+            return NextResponse.json({
+                success: true,
+                data: [],
+                period_hours: 24,
+                timestamp: new Date().toISOString(),
+                message: 'Insights not available - database not configured'
+            }, {
+                headers: getRateLimitHeaders(rateLimitResult)
+            });
         }
 
         const { searchParams } = new URL(request.url);
@@ -125,11 +131,18 @@ export async function GET(request) {
         });
 
     } catch (error) {
-        console.error('Error fetching volume trends:', error);
-        return NextResponse.json(
-            { error: 'Failed to fetch volume trends' },
-            { status: 500 }
-        );
+        // Log error in development but don't break the frontend
+        if (process.env.NODE_ENV === 'development') {
+            console.error('Error fetching volume trends:', error);
+        }
+        // Return empty data gracefully instead of 500 error
+        return NextResponse.json({
+            success: true,
+            data: [],
+            period_hours: 24,
+            timestamp: new Date().toISOString(),
+            message: 'Insights temporarily unavailable'
+        });
     }
 }
 
