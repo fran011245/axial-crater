@@ -511,7 +511,9 @@ const ColumnSuggestionDialog = ({ isOpen, onClose, isClassicTheme = false }) => 
 };
 
 export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => {
-    const { isMobile } = useIsMobile();
+    const { isMobile: isMobileHook } = useIsMobile();
+    // Safe default for SSR - always use desktop view during prerendering
+    const isMobile = typeof isMobileHook === 'boolean' ? isMobileHook : false;
     const [searchQuery, setSearchQuery] = useState("");
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSuggestionDialogOpen, setIsSuggestionDialogOpen] = useState(false);

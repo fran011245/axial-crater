@@ -8,14 +8,11 @@ import { useState, useEffect } from 'react';
  */
 export const useIsMobile = () => {
     // Inicializar con false para SSR (server-side rendering)
+    // IMPORTANT: Always return boolean values, never undefined
     const [isMobile, setIsMobile] = useState(false);
     const [isTablet, setIsTablet] = useState(false);
-    const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-        // Marcar que estamos en el cliente
-        setIsClient(true);
-        
         // Solo ejecutar en el cliente
         if (typeof window === 'undefined') return;
 
@@ -37,11 +34,10 @@ export const useIsMobile = () => {
         };
     }, []);
 
-    // Durante SSR, retornar false para evitar errores
-    if (!isClient) {
-        return { isMobile: false, isTablet: false };
-    }
-
-    return { isMobile, isTablet };
+    // Always return explicit boolean values to prevent undefined errors during SSR
+    return { 
+        isMobile: Boolean(isMobile), 
+        isTablet: Boolean(isTablet) 
+    };
 };
 

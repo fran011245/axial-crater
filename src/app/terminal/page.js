@@ -10,9 +10,7 @@ const DraggableGrid = dynamic(() => import('../../components/terminal/DraggableG
 
 
 export default function TerminalPage() {
-    const { isMobile: isMobileValue } = useIsMobile();
-    // Safe value for SSR - default to false (desktop behavior) to prevent ReferenceError
-    const isMobile = typeof isMobileValue !== 'undefined' ? isMobileValue : false;
+    const { isMobile } = useIsMobile();
     const [status, setStatus] = useState(null);
     const [volume, setVolume] = useState(null);
     const [movements, setMovements] = useState([]);
@@ -81,8 +79,8 @@ export default function TerminalPage() {
         const layouts = { ...baseLayouts };
         const breakpoints = ['lg', 'md', 'sm', 'xs'];
         
-        // Safe check: isMobile might be undefined during SSR
-        const mobileMode = typeof isMobile !== 'undefined' ? isMobile : false;
+        // isMobile is always a boolean (false during SSR)
+        const mobileMode = isMobile;
         
         breakpoints.forEach(bp => {
             const base = [...baseLayouts[bp]];
@@ -134,7 +132,7 @@ export default function TerminalPage() {
         });
         
         return layouts;
-    }, [tokenWidgets, isMobile ?? false]);
+    }, [tokenWidgets, isMobile]);
 
     useEffect(() => {
         // Mark component as mounted to avoid hydration mismatch
@@ -302,8 +300,8 @@ export default function TerminalPage() {
                 rowHeight={100}
                 margin={[4, 4]}
                 containerPadding={[0, 0]}
-                isDraggable={typeof isMobile !== 'undefined' ? !isMobile : true}
-                isResizable={typeof isMobile !== 'undefined' ? !isMobile : true}
+                isDraggable={!isMobile}
+                isResizable={!isMobile}
                 draggableHandle=".drag-handle"
                 resizeHandles={['s', 'se']}
             >
