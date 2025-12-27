@@ -10,6 +10,9 @@ const DraggableGrid = dynamic(() => import('../../components/terminal/DraggableG
 
 
 export default function TerminalPage() {
+    const { isMobile: isMobileValue } = useIsMobile();
+    // Safe value for SSR - default to false (desktop behavior) to prevent ReferenceError
+    const isMobile = typeof isMobileValue !== 'undefined' ? isMobileValue : false;
     const [status, setStatus] = useState(null);
     const [volume, setVolume] = useState(null);
     const [movements, setMovements] = useState([]);
