@@ -138,23 +138,7 @@ export default function TerminalPage() {
         // Mark component as mounted to avoid hydration mismatch
         setIsMounted(true);
         
-        // Load theme preference from localStorage AFTER mount to avoid hydration mismatch
-        try {
-            const savedTheme = localStorage.getItem('terminalTheme');
-            if (savedTheme === 'classic') {
-                setIsClassicTheme(true);
-            }
-        } catch (e) {
-            // localStorage not available, use default theme
-            console.warn('localStorage not available, using default theme');
-        }
-    }, []);
-
-    useEffect(() => {
-        // Only set up clock after component is mounted to avoid hydration mismatch
-        if (!isMounted) return;
-        
-        // Set initial time immediately
+        // Set initial time immediately (before localStorage check)
         const updateTime = () => {
             const now = new Date();
             
@@ -178,6 +162,17 @@ export default function TerminalPage() {
         
         // Then update every second
         const timer = setInterval(updateTime, 1000);
+        
+        // Load theme preference from localStorage AFTER mount to avoid hydration mismatch
+        try {
+            const savedTheme = localStorage.getItem('terminalTheme');
+            if (savedTheme === 'classic') {
+                setIsClassicTheme(true);
+            }
+        } catch (e) {
+            // localStorage not available, use default theme
+            console.warn('localStorage not available, using default theme');
+        }
 
         // Data Fetching
         async function fetchData() {
@@ -253,7 +248,7 @@ export default function TerminalPage() {
             clearInterval(fundingTimer);
             if (snapshotTimer) clearInterval(snapshotTimer);
         };
-    }, [isMounted]);
+    }, []); // Run once on mount
 
     const toggleTheme = () => {
         const newTheme = !isClassicTheme;
