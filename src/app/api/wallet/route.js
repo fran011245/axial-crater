@@ -7,38 +7,122 @@ const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
 // Mapa de contract addresses conocidos para tokens populares
 // Esto permite obtener balances incluso si el token no tuvo transacciones recientes
 const KNOWN_TOKEN_CONTRACTS = {
-    'UNI': '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
+    // Stablecoins
     'USDT': '0xdac17f958d2ee523a2206206994597c13d831ec7',
     'USDC': '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    'DAI': '0x6b175474e89094c44da98b954eedeac495271d0f',
+    'BUSD': '0x4fabb145d64652a948d72533023f6e7a623c7c53',
+    'TUSD': '0x0000000000085d4780b73119b644ae5ecd22b376',
+    
+    // Major DeFi Tokens
+    'UNI': '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984',
     'LINK': '0x514910771af9ca656af840dff83e8264ecf986ca',
     'AAVE': '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
+    'MKR': '0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2',
+    'COMP': '0xc00e94cb662c3520282e6f5717214004a7f26888',
+    'SNX': '0xc011a73ee8576fb46f5e1c5751ca3b9fe0af2a6f',
+    'CRV': '0xd533a949740bb3306d119cc777fa900ba034cd52',
+    'SUSHI': '0x6b3595068778dd592e39a122f4f5a5cf09c90fe2',
+    '1INCH': '0x111111111117dc0aa78b770fa6a738034120c302',
+    'YFI': '0x0bc529c00c6401aef6d220be8c6ea1667f6ad93e',
+    
+    // Wrapped Tokens
+    'WETH': '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    'WBTC': '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599',
+    
+    // Exchange Tokens
     'ZRX': '0xe41d2489571d322189246dafa5ebde1f4699f498',
     'LEO': '0x2af5d2ad76741191d15dfe7bf6ac92d4bd912ca3',
-    'GMT': '0x7ddc52c4de30e94be3a6a0a2b259b2850f421989',
-    'XAUt': '0x68749665ff8d2d112fa859aa293f07a622782f38',
-    'FLOKI': '0xcf0c122c6b73ff809c693db761e7baebe62b6a2e',
+    'HT': '0x6f259637dcd74c767781e37bc6133cd6a68aa161',
+    'OKB': '0x75231f58b43240c9718dd58b4967c5114342a86c',
+    
+    // Meme Tokens
+    'SHIB': '0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce',
     'PEPE': '0x6982508145454ce325ddbe47a25d4ec3d2311933',
+    'FLOKI': '0xcf0c122c6b73ff809c693db761e7baebe62b6a2e',
+    'DOGE': '0x4206931337dc273a210d25da52d89c289e57448b', // Wrapped DOGE on Ethereum
+    
+    // Gaming/Metaverse
+    'GMT': '0x7ddc52c4de30e94be3a6a0a2b259b2850f421989',
+    'AXS': '0xbb0e17ef65f82ab018d8edd776e8dd940327b28b',
+    'SAND': '0x3845badade8e6ddcc0516eaa3b7429e22b1b18d73',
+    'MANA': '0x0f5d2fb29fb7d3cfee444a200298f468908cc942',
+    'ENJ': '0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c',
+    'CHZ': '0x3506424f91fd33084466f402d5d97f05f8e3b4af',
+    
+    // Other Popular Tokens
+    'MATIC': '0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0',
     'LIF3': '0x7138eb0d563f3f6722500936a11dcae99d738a2c',
     'PNK': '0x93ed3fbe21207ec2e8f2d3c3de6e058cb73bc04d',
     'SPEC': '0xadf7c35560035944e805d98ff17d58cde2449389',
+    'XAUt': '0x68749665ff8d2d112fa859aa293f07a622782f38',
+    'BAT': '0x0d8775f648430679a709e98d2b0cb6250d2887ef',
+    'ZIL': '0x05f4a42e251f2d52b6edfcc5de922007c4b4e0c4',
+    'ATOM': '0x8d983cb9388eaf77b2e0f0e1c0c8b4b8e8b4b8e8', // Wrapped ATOM on Ethereum
+    'DOT': '0x8d983cb9388eaf77b2e0f0e1c0c8b4b8e8b4b8e8', // Wrapped DOT on Ethereum
+    'AVAX': '0x85f138bfee4ef8e540890cfb48f620571d67eda3', // Wrapped AVAX on Ethereum
+    'FTM': '0x4e15361fd6b4bb609fa63c81a2be19d873717870', // Wrapped FTM on Ethereum
+    'SOL': '0xd31a59c85ae9d8edefec411d448f90841571b89c', // Wrapped SOL on Ethereum
 };
 
 // Mapa de decimals conocidos para tokens populares
 const KNOWN_TOKEN_DECIMALS = {
-    'UNI': 18,
+    // Stablecoins
     'USDT': 6,
     'USDC': 6,
+    'DAI': 18,
+    'BUSD': 18,
+    'TUSD': 18,
+    
+    // Major DeFi Tokens
+    'UNI': 18,
     'LINK': 18,
     'AAVE': 18,
+    'MKR': 18,
+    'COMP': 18,
+    'SNX': 18,
+    'CRV': 18,
+    'SUSHI': 18,
+    '1INCH': 18,
+    'YFI': 18,
+    
+    // Wrapped Tokens
+    'WETH': 18,
+    'WBTC': 8,
+    
+    // Exchange Tokens
     'ZRX': 18,
     'LEO': 18,
-    'GMT': 18,
-    'XAUt': 6,
-    'FLOKI': 18,
+    'HT': 18,
+    'OKB': 18,
+    
+    // Meme Tokens
+    'SHIB': 18,
     'PEPE': 18,
+    'FLOKI': 18,
+    'DOGE': 8,
+    
+    // Gaming/Metaverse
+    'GMT': 18,
+    'AXS': 18,
+    'SAND': 18,
+    'MANA': 18,
+    'ENJ': 18,
+    'CHZ': 18,
+    
+    // Other Popular Tokens
+    'MATIC': 18,
     'LIF3': 18,
     'PNK': 18,
     'SPEC': 18,
+    'XAUt': 6,
+    'BAT': 18,
+    'ZIL': 12,
+    'ATOM': 18,
+    'DOT': 10,
+    'AVAX': 18,
+    'FTM': 18,
+    'SOL': 8,
 };
 
 export async function GET(request) {
@@ -786,7 +870,21 @@ export async function GET(request) {
                 console.log(`Tokens with prices:`, Object.keys(tokenPrices).join(', '));
                 const tokensWithoutPrice = Array.from(allSymbols).filter(s => !tokenPrices[s.toUpperCase()] && !tokenPrices[s]);
                 if (tokensWithoutPrice.length > 0) {
-                    console.log(`Tokens without prices:`, tokensWithoutPrice.join(', '));
+                    console.warn(`⚠️ Tokens without prices (${tokensWithoutPrice.length}):`, tokensWithoutPrice.join(', '));
+                    
+                    // Check which of these are in KNOWN_TOKEN_CONTRACTS
+                    const knownTokensWithoutPrice = tokensWithoutPrice.filter(s => KNOWN_TOKEN_CONTRACTS[s]);
+                    if (knownTokensWithoutPrice.length > 0) {
+                        console.warn(`  ⚠️ Known tokens without prices (should have prices!):`, knownTokensWithoutPrice.join(', '));
+                    }
+                    
+                    // Check which symbols were requested vs which were received
+                    const requestedSymbols = Array.from(allSymbols).map(s => s.toUpperCase());
+                    const receivedSymbols = Object.keys(tokenPrices).map(s => s.toUpperCase());
+                    const missingSymbols = requestedSymbols.filter(s => !receivedSymbols.includes(s));
+                    if (missingSymbols.length > 0) {
+                        console.warn(`  ⚠️ Symbols requested but not received:`, missingSymbols.join(', '));
+                    }
                 }
             }
 
@@ -907,97 +1005,229 @@ export async function GET(request) {
 
         // Fetch current balances for top tokens
         const fetchTokenBalance = async (contractAddress, decimals) => {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                // Use V2 API with chainid=1
-                const response = await fetch(
-                    `https://api.etherscan.io/v2/api?module=account&action=tokenbalance&contractaddress=${contractAddress}&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
-                    {
-                        signal: controller.signal,
-                        cache: 'no-store',
-                        headers: { 'Accept': 'application/json' }
+            const MAX_RETRIES = 3;
+            const RETRY_DELAY = 1000; // 1 second base delay
+            
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15s
+                    
+                    // Use V2 API with chainid=1
+                    const response = await fetch(
+                        `https://api.etherscan.io/v2/api?module=account&action=tokenbalance&contractaddress=${contractAddress}&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
+                        {
+                            signal: controller.signal,
+                            cache: 'no-store',
+                            headers: { 'Accept': 'application/json' }
+                        }
+                    );
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        // Handle rate limiting (429) with longer delays
+                        if (response.status === 429 && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt * 2; // Longer delay for rate limits
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`Token balance API rate limited for ${contractAddress} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        // Retry on 5xx errors
+                        if (response.status >= 500 && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt;
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`Token balance API HTTP error for ${contractAddress}: ${response.status} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn(`Token balance API HTTP error for ${contractAddress}: ${response.status} (final attempt)`);
+                        }
+                        return null;
                     }
-                );
-                
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn(`Token balance API HTTP error for ${contractAddress}: ${response.status}`);
+                    
+                    const data = await response.json();
+                    if (data.status === '1' && data.result) {
+                        const rawBalance = data.result;
+                        const balance = parseFloat(rawBalance) / Math.pow(10, decimals);
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`✅ Balance fetched for contract ${contractAddress}: ${balance.toFixed(6)} (raw: ${rawBalance}, decimals: ${decimals})`);
+                        }
+                        return balance;
+                    } else {
+                        // Check if it's a rate limit error in the response
+                        if (data.message && data.message.toLowerCase().includes('rate limit') && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt * 2;
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`Token balance API rate limited in response for ${contractAddress} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn(`❌ Token balance API error for ${contractAddress}:`, data.message, data.result);
+                            console.warn(`   Response status: ${data.status}, Message: ${data.message} (attempt ${attempt}/${MAX_RETRIES})`);
+                        }
+                        
+                        // Don't retry on client errors (4xx except 429)
+                        if (data.status && data.status !== '1' && !data.message?.toLowerCase().includes('rate limit')) {
+                            return null;
+                        }
+                        
+                        // Retry on other errors if we have attempts left
+                        if (attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
                     }
                     return null;
-                }
-                
-                const data = await response.json();
-                if (data.status === '1' && data.result) {
-                    const rawBalance = data.result;
-                    const balance = parseFloat(rawBalance) / Math.pow(10, decimals);
+                } catch (error) {
+                    const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                    const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                    
                     if (process.env.NODE_ENV === 'development') {
-                        console.log(`✅ Balance fetched for contract ${contractAddress}: ${balance.toFixed(6)} (raw: ${rawBalance}, decimals: ${decimals})`);
+                        console.warn(`Error fetching balance for contract ${contractAddress} (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
                     }
-                    return balance;
-                } else {
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn(`❌ Token balance API error for ${contractAddress}:`, data.message, data.result);
-                        console.warn(`   Response status: ${data.status}, Message: ${data.message}`);
+                    
+                    // Retry on timeout or network errors
+                    if ((isTimeout || isNetworkError) && attempt < MAX_RETRIES) {
+                        const delay = RETRY_DELAY * attempt;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn(`Retrying in ${delay}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                        }
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    
+                    // Final attempt failed
+                    if (attempt === MAX_RETRIES) {
+                        return null;
                     }
                 }
-                return null;
-            } catch (error) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn(`Error fetching balance for contract ${contractAddress}:`, error.message);
-                }
-                return null;
             }
+            
+            return null;
         };
 
         const fetchETHBalance = async () => {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                // Use V2 API with chainid=1
-                const response = await fetch(
-                    `https://api.etherscan.io/v2/api?module=account&action=balance&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
-                    {
-                        signal: controller.signal,
-                        cache: 'no-store',
-                        headers: { 'Accept': 'application/json' }
+            const MAX_RETRIES = 3;
+            const RETRY_DELAY = 1000; // 1 second base delay
+            
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased to 15s
+                    
+                    // Use V2 API with chainid=1
+                    const response = await fetch(
+                        `https://api.etherscan.io/v2/api?module=account&action=balance&address=${WALLET_ADDRESS}&chainid=1&tag=latest&apikey=${ETHERSCAN_API_KEY}`,
+                        {
+                            signal: controller.signal,
+                            cache: 'no-store',
+                            headers: { 'Accept': 'application/json' }
+                        }
+                    );
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        // Handle rate limiting (429) with longer delays
+                        if (response.status === 429 && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt * 2; // Longer delay for rate limits
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`ETH balance API rate limited (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        // Retry on 5xx errors
+                        if (response.status >= 500 && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt;
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`ETH balance API HTTP error: ${response.status} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn(`ETH balance API HTTP error: ${response.status} (final attempt)`);
+                        }
+                        return null;
                     }
-                );
-                
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn(`ETH balance API HTTP error: ${response.status}`);
+                    
+                    const data = await response.json();
+                    if (data.status === '1' && data.result) {
+                        const rawBalance = data.result;
+                        const balance = parseFloat(rawBalance) / 1e18;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.log(`✅ ETH balance fetched: ${balance.toFixed(6)} ETH (raw: ${rawBalance})`);
+                        }
+                        return balance;
+                    } else {
+                        // Check if it's a rate limit error in the response
+                        if (data.message && data.message.toLowerCase().includes('rate limit') && attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt * 2;
+                            if (process.env.NODE_ENV === 'development') {
+                                console.warn(`ETH balance API rate limited in response (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                            }
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn('❌ ETH balance API error:', data.message, data.result);
+                            console.warn(`   Response status: ${data.status}, Message: ${data.message} (attempt ${attempt}/${MAX_RETRIES})`);
+                        }
+                        
+                        // Don't retry on client errors (4xx except 429)
+                        if (data.status && data.status !== '1' && !data.message?.toLowerCase().includes('rate limit')) {
+                            return null;
+                        }
+                        
+                        // Retry on other errors if we have attempts left
+                        if (attempt < MAX_RETRIES) {
+                            const delay = RETRY_DELAY * attempt;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
                     }
                     return null;
-                }
-                
-                const data = await response.json();
-                if (data.status === '1' && data.result) {
-                    const rawBalance = data.result;
-                    const balance = parseFloat(rawBalance) / 1e18;
+                } catch (error) {
+                    const isTimeout = error.name === 'AbortError' || error.message.includes('timeout');
+                    const isNetworkError = error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND');
+                    
                     if (process.env.NODE_ENV === 'development') {
-                        console.log(`✅ ETH balance fetched: ${balance.toFixed(6)} ETH (raw: ${rawBalance})`);
+                        console.warn(`Error fetching ETH balance (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
                     }
-                    return balance;
-                } else {
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn('❌ ETH balance API error:', data.message, data.result);
-                        console.warn(`   Response status: ${data.status}, Message: ${data.message}`);
+                    
+                    // Retry on timeout or network errors
+                    if ((isTimeout || isNetworkError) && attempt < MAX_RETRIES) {
+                        const delay = RETRY_DELAY * attempt;
+                        if (process.env.NODE_ENV === 'development') {
+                            console.warn(`Retrying in ${delay}ms due to ${isTimeout ? 'timeout' : 'network error'}...`);
+                        }
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    
+                    // Final attempt failed
+                    if (attempt === MAX_RETRIES) {
+                        return null;
                     }
                 }
-                return null;
-            } catch (error) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn('Error fetching ETH balance:', error.message);
-                }
-                return null;
             }
+            
+            return null;
         };
 
         // Fetch balances in parallel
@@ -1060,12 +1290,28 @@ export async function GET(request) {
                 console.log(`  Balance: ${balance !== null && balance !== undefined ? balance.toFixed(6) : 'null'}`);
                 console.log(`  Price: $${price.toFixed(6)} (from token.price: ${token.price || 'N/A'}, from tokenPrices: ${tokenPrices?.[token.symbol] || 'N/A'})`);
                 console.log(`  Balance USD: $${balanceUSD.toFixed(2)}`);
+                
+                // Enhanced logging for debugging balance display issues
                 if (balanceError) {
                     console.warn(`  ⚠️ Error: ${balanceError}`);
                 } else if (balance === 0) {
                     console.log(`  ℹ️ Balance is 0 (wallet has no ${token.symbol})`);
                 } else if (price === 0) {
-                    console.warn(`  ⚠️ Price is 0 (cannot calculate USD value) - token may not be in price fetch list`);
+                    // Token has balance but no price - this is the problem we're debugging
+                    const isInKnownTokens = !!KNOWN_TOKEN_CONTRACTS[token.symbol];
+                    const hasContractAddress = !!(token.contractAddress || tokenContractAddresses[token.symbol] || KNOWN_TOKEN_CONTRACTS[token.symbol]);
+                    const wasInPriceFetch = allSymbols.has(token.symbol);
+                    
+                    console.warn(`  ⚠️ PROBLEM: Token has balance (${balance.toFixed(6)}) but price is 0`);
+                    console.warn(`     - In KNOWN_TOKEN_CONTRACTS: ${isInKnownTokens}`);
+                    console.warn(`     - Has contract address: ${hasContractAddress} (${token.contractAddress || tokenContractAddresses[token.symbol] || KNOWN_TOKEN_CONTRACTS[token.symbol] || 'NONE'})`);
+                    console.warn(`     - Was in price fetch list (allSymbols): ${wasInPriceFetch}`);
+                    console.warn(`     - Price from token object: ${token.price || 'N/A'}`);
+                    console.warn(`     - Price from tokenPrices: ${tokenPrices?.[token.symbol] || 'N/A'}`);
+                    console.warn(`     - Reason: Token may not be in CoinMarketCap/CoinGecko or symbol mismatch`);
+                } else if (balance > 0 && balanceUSD === 0) {
+                    // This shouldn't happen if price > 0, but log it anyway
+                    console.warn(`  ⚠️ WARNING: Balance > 0 (${balance.toFixed(6)}) and price > 0 (${price.toFixed(6)}) but balanceUSD is 0`);
                 }
             }
             
@@ -1088,6 +1334,48 @@ export async function GET(request) {
             topTokensWithBalances.forEach(t => {
                 console.log(`  ${t.symbol}: IN=$${t.inVolumeUSD?.toFixed(2) || 0}, OUT=$${t.outVolumeUSD?.toFixed(2) || 0}, BAL=$${t.currentBalanceUSD?.toFixed(2) || 0}`);
             });
+            
+            // Enhanced summary for debugging balance display issues
+            console.log(`\n=== BALANCE USD CALCULATION SUMMARY ===`);
+            const tokensWithBalanceAndUSD = topTokensWithBalances.filter(t => t.currentBalance > 0 && t.currentBalanceUSD > 0);
+            const tokensWithBalanceButNoUSD = topTokensWithBalances.filter(t => t.currentBalance > 0 && t.currentBalanceUSD === 0);
+            const tokensWithoutBalance = topTokensWithBalances.filter(t => t.currentBalance === 0 || t.currentBalance === null);
+            const tokensWithBalanceError = topTokensWithBalances.filter(t => t.balanceError);
+            
+            console.log(`✅ Tokens with balance and USD (${tokensWithBalanceAndUSD.length}):`);
+            tokensWithBalanceAndUSD.forEach(t => {
+                console.log(`  - ${t.symbol}: Balance=${t.currentBalance.toFixed(6)}, USD=$${t.currentBalanceUSD.toFixed(2)}`);
+            });
+            
+            if (tokensWithBalanceButNoUSD.length > 0) {
+                console.warn(`\n⚠️ Tokens with balance but NO USD (NEEDS FIX) (${tokensWithBalanceButNoUSD.length}):`);
+                tokensWithBalanceButNoUSD.forEach(t => {
+                    const isInKnown = !!KNOWN_TOKEN_CONTRACTS[t.symbol];
+                    const hasContract = !!(t.contractAddress || tokenContractAddresses[t.symbol] || KNOWN_TOKEN_CONTRACTS[t.symbol]);
+                    const price = t.price || tokenPrices?.[t.symbol] || 0;
+                    const reason = price === 0 
+                        ? (isInKnown ? 'Known token but price fetch failed' : 'Not in KNOWN_TOKEN_CONTRACTS and price fetch failed')
+                        : 'Price calculation issue';
+                    
+                    console.warn(`  - ${t.symbol}: Balance=${t.currentBalance.toFixed(6)}, Price=$${price.toFixed(6)}, Reason=${reason}`);
+                    console.warn(`    In KNOWN_TOKEN_CONTRACTS: ${isInKnown}, Has contract: ${hasContract}`);
+                });
+            }
+            
+            if (tokensWithoutBalance.length > 0) {
+                console.log(`\nℹ️ Tokens without balance (${tokensWithoutBalance.length}):`);
+                tokensWithoutBalance.forEach(t => {
+                    console.log(`  - ${t.symbol}: 0`);
+                });
+            }
+            
+            if (tokensWithBalanceError.length > 0) {
+                console.warn(`\n⚠️ Tokens with balance fetch errors (${tokensWithBalanceError.length}):`);
+                tokensWithBalanceError.forEach(t => {
+                    console.warn(`  - ${t.symbol}: ${t.balanceError}`);
+                });
+            }
+            
             console.log(`============================\n`);
         }
 

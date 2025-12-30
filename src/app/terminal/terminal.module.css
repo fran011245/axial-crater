@@ -246,7 +246,7 @@
 
 .warningRow {
     display: grid;
-    grid-template-columns: 120px 80px 100px 100px;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     padding: 6px 10px;
     border-bottom: 1px solid #30363d;
     font-size: 12px;
@@ -281,6 +281,17 @@
 
 .warnVol {
     color: #f0883e;
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.warnVolHeader {
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
 }
 
 .warningGrid {
@@ -292,7 +303,7 @@
 
 .warningHeaderRow {
     display: grid;
-    grid-template-columns: 120px 80px 100px 100px;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     padding: 6px 10px;
     background: #161b22;
     color: #8b949e;
@@ -323,9 +334,18 @@
     grid-column: 2 / 3;
 }
 
+/* Contenedor para tabla con scroll horizontal sincronizado */
+.tableContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 .tableHeader {
     display: grid;
-    grid-template-columns: 90px 90px 70px 70px 110px 110px 110px 50px 50px 40px;
+    grid-template-columns: 90px 90px 70px 70px 110px 110px 110px 110px 50px 50px 40px;
     padding: 6px 10px;
     background: #161b22;
     color: #8b949e;
@@ -337,6 +357,9 @@
     z-index: 10;
     letter-spacing: 0.3px;
     align-items: center;
+    /* Asegurar que el header tenga el mismo ancho mínimo que las filas */
+    min-width: fit-content;
+    flex-shrink: 0;
 }
 
 .tableHeader span {
@@ -366,19 +389,24 @@
 }
 
 .scrollList {
+    overflow-x: visible;
     overflow-y: auto;
     flex-grow: 1;
+    /* Asegurar que el contenido tenga el ancho mínimo necesario */
+    min-width: fit-content;
 }
 
 .tableRow {
     display: grid;
-    grid-template-columns: 90px 90px 70px 70px 110px 110px 110px 50px 50px 40px;
+    grid-template-columns: 90px 90px 70px 70px 110px 110px 110px 110px 50px 50px 40px;
     padding: 6px 10px;
     border-bottom: 1px solid #30363d;
     align-items: center;
     cursor: crosshair;
     font-size: 13px;
     transition: background 0.2s ease, color 0.2s ease;
+    /* Asegurar que las filas tengan el mismo ancho mínimo que el header */
+    min-width: fit-content;
 }
 
 /* Zebra striping for table rows */
@@ -849,9 +877,20 @@
     border-top: 1px solid #30363d;
 }
 
+/* Contenedor para tabla de wallet con scroll horizontal sincronizado */
+.walletTableContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 .walletGrid {
     flex-grow: 1;
     overflow-y: auto;
+    overflow-x: visible;
+    min-width: fit-content;
 }
 
 .walletHeaderRow {
@@ -865,6 +904,12 @@
     font-weight: bold;
     gap: 8px;
     letter-spacing: 0.3px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    /* Asegurar que el header tenga el mismo ancho mínimo que las filas */
+    min-width: fit-content;
+    flex-shrink: 0;
 }
 
 .walletHeaderRow span:first-child {
@@ -925,6 +970,8 @@
     gap: 8px;
     align-items: center;
     transition: background 0.2s ease;
+    /* Asegurar que las filas tengan el mismo ancho mínimo que el header */
+    min-width: fit-content;
 }
 
 .walletRow span:first-child {
@@ -1081,6 +1128,16 @@
 .fundingVol {
     color: #f0883e;
     text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.fundingVolHeader {
+    text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
 }
 
 /* Sector D: Token Detail Widget */

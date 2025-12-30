@@ -177,15 +177,15 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
                         TICKER
                         {sortByTicker && <span className={styles.sortArrow}>{sortByTicker === 'desc' ? '↓' : '↑'}</span>}
                     </span>
-                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('spread')}>
+                    <span className={`${styles.warningHeaderSortable} ${styles.warnVolHeader}`} onClick={() => handleSort('spread')}>
                         SPREAD
                         {sortBySpread && <span className={styles.sortArrow}>{sortBySpread === 'desc' ? '↓' : '↑'}</span>}
                     </span>
-                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('24hvol')}>
+                    <span className={`${styles.warningHeaderSortable} ${styles.warnVolHeader}`} onClick={() => handleSort('24hvol')}>
                         24H_VOL
                         {sortBy24HVol && <span className={styles.sortArrow}>{sortBy24HVol === 'desc' ? '↓' : '↑'}</span>}
                     </span>
-                    <span className={styles.warningHeaderSortable} onClick={() => handleSort('7dvol')}>
+                    <span className={`${styles.warningHeaderSortable} ${styles.warnVolHeader}`} onClick={() => handleSort('7dvol')}>
                         7D_VOL
                         {sortBy7DVol && <span className={styles.sortArrow}>{sortBy7DVol === 'desc' ? '↓' : '↑'}</span>}
                     </span>
@@ -210,7 +210,7 @@ export const LiquidityRiskMonitor = ({ volume, isClassicTheme = false }) => {
                                     {p.volumeUSD ? `$${fmtVol(p.volumeUSD)}` : '---'}
                                 </span>
                                 <span className={styles.warnVol}>
-                                    {fmtVol(p.vol7d)}
+                                    {p.vol7d ? `$${fmtVol(p.vol7d)}` : '---'}
                                 </span>
                             </div>
                         ))
@@ -524,6 +524,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
     const [sortBy24HVol, setSortBy24HVol] = useState(null);
     const [sortBy7DVol, setSortBy7DVol] = useState(null);
     const [sortBy30DVol, setSortBy30DVol] = useState(null);
+    const [sortByOI, setSortByOI] = useState(null);
     const [sortByD, setSortByD] = useState(null);
     const [sortByW, setSortByW] = useState(null);
     
@@ -597,6 +598,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         setSortBy24HVol(null);
         setSortBy7DVol(null);
         setSortBy30DVol(null);
+        setSortByOI(null);
         setSortByD(null);
         setSortByW(null);
 
@@ -629,6 +631,10 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
             if (sortBy30DVol === null) setSortBy30DVol('desc');
             else if (sortBy30DVol === 'desc') setSortBy30DVol('asc');
             else setSortBy30DVol(null);
+        } else if (column === 'oi') {
+            if (sortByOI === null) setSortByOI('desc');
+            else if (sortByOI === 'desc') setSortByOI('asc');
+            else setSortByOI(null);
         } else if (column === 'd') {
             if (sortByD === null) setSortByD('desc');
             else if (sortByD === 'desc') setSortByD('asc');
@@ -687,9 +693,13 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         
         // Determine which column is active
         const activeSort = sortBySymbol || sortByLast || sortBySD || sortBySpread || sortBy24HVol || 
-                          sortBy7DVol || sortBy30DVol || sortByD || sortByW;
+                          sortBy7DVol || sortBy30DVol || sortByOI || sortByD || sortByW;
         
-        if (!activeSort) return sorted;
+        // Default sort: 7D volume descending when no active sort
+        if (!activeSort) {
+            sorted.sort((a, b) => (b.vol7d || 0) - (a.vol7d || 0));
+            return sorted;
+        }
         
         sorted.sort((a, b) => {
             const stA = getMovementStatus(a.symbol);
@@ -729,6 +739,11 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                     ? (b.vol30d || 0) - (a.vol30d || 0) 
                     : (a.vol30d || 0) - (b.vol30d || 0);
             }
+            if (sortByOI) {
+                return sortByOI === 'desc' 
+                    ? (b.openInterest || 0) - (a.openInterest || 0) 
+                    : (a.openInterest || 0) - (b.openInterest || 0);
+            }
             if (sortByD) {
                 const orderA = statusOrder[stA.d] || 0;
                 const orderB = statusOrder[stB.d] || 0;
@@ -744,7 +759,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
         });
         
         return sorted;
-    }, [filteredPairs, sortBySymbol, sortByLast, sortBySD, sortBySpread, sortBy24HVol, sortBy7DVol, sortBy30DVol, sortByD, sortByW, movements]);
+    }, [filteredPairs, sortBySymbol, sortByLast, sortBySD, sortBySpread, sortBy24HVol, sortBy7DVol, sortBy30DVol, sortByOI, sortByD, sortByW, movements]);
     
     // Helper to get trend indicator
     const getTrendIndicator = (symbol) => {
@@ -964,7 +979,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                 </div>
             ) : (
                 /* Table View for Desktop/Tablet */
-                <>
+                <div className={styles.tableContainer}>
                     <div className={styles.tableHeader}>
                         <span className={styles.tableHeaderSortable} onClick={() => handleSort('symbol')}>
                             SYMBOL
@@ -994,6 +1009,10 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                             30D_VOL
                             {sortBy30DVol && <span className={styles.sortArrow}>{sortBy30DVol === 'desc' ? '↓' : '↑'}</span>}
                         </span>
+                        <span className={styles.tableHeaderSortable} onClick={() => handleSort('oi')}>
+                            OI_DER
+                            {sortByOI && <span className={styles.sortArrow}>{sortByOI === 'desc' ? '↓' : '↑'}</span>}
+                        </span>
                         <span className={styles.tableHeaderSortable} onClick={() => handleSort('d')}>
                             D
                             {sortByD && <span className={styles.sortArrow}>{sortByD === 'desc' ? '↓' : '↑'}</span>}
@@ -1013,7 +1032,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                             </button>
                         </span>
                     </div>
-                    <div className={styles.scrollList} style={{ flex: 1, overflow: 'auto' }}>
+                    <div className={styles.scrollList}>
                         {sortedPairs.length > 0 ? (
                             sortedPairs.map((p) => {
                                 const st = getMovementStatus(p.symbol);
@@ -1039,9 +1058,16 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                                         <span className={styles.colVol}>{fmtVals(p.volumeUSD)}</span>
                                         <span className={styles.colVol}>{fmtVals(p.vol7d)}</span>
                                         <span className={styles.colVol}>{fmtVals(p.vol30d)}</span>
+                                        <span className={styles.colVol}>
+                                            {p.openInterestUSD !== null && p.openInterestUSD !== undefined 
+                                                ? fmtVals(p.openInterestUSD) 
+                                                : (p.openInterest !== null && p.openInterest !== undefined 
+                                                    ? `${fmtVals(p.openInterest)} raw` 
+                                                    : '---')}
+                                        </span>
                                         <span className={
-                                            st.d === 'OK' ? styles.statusOk : 
-                                            st.d === 'CLSD' ? styles.statusErr : 
+                                            st.d === 'OK' ? styles.statusOk :
+                                            st.d === 'CLSD' ? styles.statusErr :
                                             styles.statusNa
                                         }>{st.d}</span>
                                         <span className={
@@ -1059,7 +1085,7 @@ export const MarketScanner = ({ volume, movements, isClassicTheme = false }) => 
                             </div>
                         )}
                     </div>
-                </>
+                </div>
             )}
             <ColumnSuggestionDialog 
                 isOpen={isSuggestionDialogOpen} 
@@ -1187,7 +1213,7 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                     </span>
                 </div>
             </div>
-            <div className={styles.walletGrid}>
+            <div className={styles.walletTableContainer}>
                 <div className={styles.walletHeaderRow}>
                     <span>TOKEN_SYM</span>
                     <span 
@@ -1224,7 +1250,7 @@ export const WalletMonitor = ({ walletData, isClassicTheme = false }) => {
                         )}
                     </span>
                 </div>
-                <div className={styles.walletList}>
+                <div className={styles.walletGrid}>
                     {sortedTokens.length > 0 ? (
                         sortedTokens.map(t => {
                             // Format currency with $ sign and K/M/B notation
@@ -1419,8 +1445,8 @@ export const FundingStats = ({ funding, isClassicTheme = false }) => {
             <div className={styles.fundingGridContainer}>
                 <div className={styles.fundingHeaderRow}>
                     <span>TICKER</span>
-                    <span>APR 1H</span>
-                    <span>24H_VOL</span>
+                    <span>APR_FRR</span>
+                    <span className={styles.fundingVolHeader}>24H_VOL</span>
                 </div>
                 <div className={styles.fundingList}>
                     {filteredFunding.length > 0 ? (

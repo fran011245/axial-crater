@@ -2,20 +2,26 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import styles from './terminal/terminal.module.css';
-import { NetworkVitals, MarketScanner, WalletMonitor, StatusFeed, LiquidityRiskMonitor } from '../components/terminal/TerminalWidgets';
+import { NetworkVitals, MarketScanner, WalletMonitor, StatusFeed, LiquidityRiskMonitor, FundingStats } from '../components/terminal/TerminalWidgets';
 import TokenDetailWidget from '../components/terminal/TokenDetailWidget';
+import { useIsMobile } from '../hooks/useIsMobile';
 import dynamic from 'next/dynamic';
 const DraggableGrid = dynamic(() => import('../components/terminal/DraggableGrid'), { ssr: false });
 
 
 export default function TerminalPage() {
+    const { isMobile } = useIsMobile();
     const [status, setStatus] = useState(null);
     const [volume, setVolume] = useState(null);
     const [movements, setMovements] = useState([]);
-    const [currentTime, setCurrentTime] = useState("");
+    const [utcTime, setUtcTime] = useState("");
+    const [localTime, setLocalTime] = useState("");
+    const [currentDate, setCurrentDate] = useState("");
     const [walletData, setWalletData] = useState(null);
+    const [fundingData, setFundingData] = useState(null);
     const [tokenWidgets, setTokenWidgets] = useState([]); // Array of { id, token }
     const [isClassicTheme, setIsClassicTheme] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     const addTokenWidget = (token) => {
         // Check if widget already exists for this token
@@ -39,28 +45,32 @@ export default function TerminalPage() {
             { i: 'liquidity', x: 0, y: 1.5, w: 3, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 3, y: 0, w: 9, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 3.5, w: 3, h: 2.5, minW: 2, minH: 1 },
-            { i: 'feed', x: 3, y: 6.0, w: 9, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 3, y: 4.1, w: 9, h: 3.9, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 6.0, w: 3, h: 2, minW: 2, minH: 1.5, static: false }
         ],
         md: [
             { i: 'vitals', x: 0, y: 0, w: 3, h: 1.5, minW: 2, minH: 1 },
             { i: 'liquidity', x: 0, y: 1.5, w: 3, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 3, y: 0, w: 7, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 3.5, w: 3, h: 2.5, minW: 2, minH: 1 },
-            { i: 'feed', x: 3, y: 6.0, w: 7, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 3, y: 4.1, w: 7, h: 3.9, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 8.0, w: 3, h: 2, minW: 2, minH: 1.5 }
         ],
         sm: [
             { i: 'vitals', x: 0, y: 0, w: 6, h: 1.5, minW: 2, minH: 1 },
             { i: 'liquidity', x: 0, y: 1.5, w: 6, h: 2, minW: 2, minH: 1.5 },
             { i: 'market', x: 0, y: 3.5, w: 6, h: 4.1, minW: 4, minH: 3 },
             { i: 'wallet', x: 0, y: 7.6, w: 6, h: 2.5, minW: 2, minH: 1 },
-            { i: 'feed', x: 0, y: 10.1, w: 6, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 0, y: 12.1, w: 6, h: 2.0, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 14.1, w: 6, h: 2, minW: 2, minH: 1.5 }
         ],
         xs: [
             { i: 'vitals', x: 0, y: 0, w: 4, h: 1.5, minW: 2, minH: 1 },
-            { i: 'liquidity', x: 0, y: 1.5, w: 4, h: 2, minW: 2, minH: 1.5 },
-            { i: 'market', x: 0, y: 3.5, w: 4, h: 4.1, minW: 4, minH: 3 },
+            { i: 'market', x: 0, y: 1.5, w: 4, h: 4.1, minW: 4, minH: 3 },
+            { i: 'liquidity', x: 0, y: 5.6, w: 4, h: 2, minW: 2, minH: 1.5 },
             { i: 'wallet', x: 0, y: 7.6, w: 4, h: 2.5, minW: 2, minH: 1 },
-            { i: 'feed', x: 0, y: 10.1, w: 4, h: 2.0, minW: 4, minH: 1.5 }
+            { i: 'feed', x: 0, y: 12.1, w: 4, h: 2.0, minW: 4, minH: 1.5 },
+            { i: 'funding', x: 0, y: 14.1, w: 4, h: 2, minW: 2, minH: 1.5 }
         ]
     };
 
@@ -68,6 +78,9 @@ export default function TerminalPage() {
     const defaultLayouts = useMemo(() => {
         const layouts = { ...baseLayouts };
         const breakpoints = ['lg', 'md', 'sm', 'xs'];
+        
+        // isMobile is always a boolean (false during SSR)
+        const mobileMode = isMobile;
         
         breakpoints.forEach(bp => {
             const base = [...baseLayouts[bp]];
@@ -90,7 +103,8 @@ export default function TerminalPage() {
                         minW: 1.5,
                         maxW: 1.5,
                         minH: 0.8,
-                        maxH: 1.2
+                        maxH: 1.2,
+                        static: mobileMode && bp === 'xs' // Static in mobile
                     });
                 } else {
                     // For smaller screens, stack vertically
@@ -101,18 +115,55 @@ export default function TerminalPage() {
                         w: bp === 'sm' ? 6 : 4,
                         h: 1.0,
                         minW: 2,
-                        minH: 0.8
+                        minH: 0.8,
+                        static: mobileMode && bp === 'xs' // Static in mobile
                     });
                 }
             });
+            
+            // Make all base layouts static in mobile (xs breakpoint)
+            if (mobileMode && bp === 'xs') {
+                base.forEach(item => {
+                    item.static = true;
+                });
+            }
+            
             layouts[bp] = base;
         });
         
         return layouts;
-    }, [tokenWidgets]);
+    }, [tokenWidgets, isMobile]);
 
     useEffect(() => {
-        // Load theme preference from localStorage
+        // Mark component as mounted to avoid hydration mismatch
+        setIsMounted(true);
+        
+        // Set initial time immediately (before localStorage check)
+        const updateTime = () => {
+            const now = new Date();
+            
+            // UTC time
+            setUtcTime(now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                timeZone: 'UTC' 
+            }) + ' UTC');
+            
+            // Local time
+            setLocalTime(now.toLocaleTimeString('en-US', { hour12: false }));
+            
+            // Date
+            setCurrentDate(now.toLocaleDateString('en-US', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: '2-digit' 
+            }).toUpperCase());
+        };
+        updateTime();
+        
+        // Then update every second
+        const timer = setInterval(updateTime, 1000);
+        
+        // Load theme preference from localStorage AFTER mount to avoid hydration mismatch
         try {
             const savedTheme = localStorage.getItem('terminalTheme');
             if (savedTheme === 'classic') {
@@ -122,14 +173,6 @@ export default function TerminalPage() {
             // localStorage not available, use default theme
             console.warn('localStorage not available, using default theme');
         }
-    }, []);
-
-    useEffect(() => {
-        // Clock
-        const timer = setInterval(() => {
-            const now = new Date();
-            setCurrentTime(now.toLocaleTimeString('en-US', { hour12: false }) + " " + now.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: '2-digit' }).toUpperCase());
-        }, 1000);
 
         // Data Fetching
         async function fetchData() {
@@ -153,18 +196,104 @@ export default function TerminalPage() {
         async function fetchWallet() {
             try {
                 const res = await fetch('/api/wallet');
+                if (!res.ok) {
+                    console.error('Wallet API error:', res.status, res.statusText);
+                    return; // Don't update state on error - keep previous data
+                }
                 const data = await res.json();
-                setWalletData(data);
-            } catch (e) { console.error(e); }
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Wallet data fetched:', { 
+                        hasTopTokens: !!data.topTokens, 
+                        topTokensCount: data.topTokens?.length || 0,
+                        hasTokens: !!data.tokens,
+                        tokensCount: data.tokens?.length || 0
+                    });
+                }
+                
+                // Smart merge: preserve previous balances if new ones are invalid
+                setWalletData(prevData => {
+                    if (!prevData || !data.topTokens) {
+                        return data; // First load or no previous data
+                    }
+                    
+                    // Merge: use new data, but preserve valid balances from previous if new ones are missing/invalid
+                    const mergedTopTokens = data.topTokens.map(newToken => {
+                        const prevToken = prevData.topTokens?.find(t => t.symbol === newToken.symbol);
+                        
+                        // If new token has valid balance, use it
+                        if (newToken.currentBalanceUSD !== null && 
+                            newToken.currentBalanceUSD !== undefined && 
+                            newToken.currentBalanceUSD > 0) {
+                            if (process.env.NODE_ENV === 'development' && prevToken && prevToken.currentBalanceUSD !== newToken.currentBalanceUSD) {
+                                console.log(`✅ Updated balance for ${newToken.symbol}: $${prevToken.currentBalanceUSD?.toFixed(2)} → $${newToken.currentBalanceUSD.toFixed(2)}`);
+                            }
+                            return newToken;
+                        }
+                        
+                        // If new token balance is invalid but previous had valid balance, preserve it
+                        if (prevToken && 
+                            prevToken.currentBalanceUSD !== null && 
+                            prevToken.currentBalanceUSD !== undefined && 
+                            prevToken.currentBalanceUSD > 0) {
+                            if (process.env.NODE_ENV === 'development') {
+                                console.log(`⚠️ Preserving previous balance for ${newToken.symbol}: $${prevToken.currentBalanceUSD.toFixed(2)} (new value was invalid)`);
+                            }
+                            return {
+                                ...newToken,
+                                currentBalance: prevToken.currentBalance,
+                                currentBalanceUSD: prevToken.currentBalanceUSD
+                            };
+                        }
+                        
+                        // Otherwise use new token (even if balance is 0/null)
+                        return newToken;
+                    });
+                    
+                    return {
+                        ...data,
+                        topTokens: mergedTopTokens
+                    };
+                });
+            } catch (e) { 
+                console.error('Wallet fetch error:', e);
+                // Don't update state on error - keep previous data
+            }
         }
         fetchWallet();
         const walletTimer = setInterval(fetchWallet, 30000);
 
+        // Funding Fetching (60s interval)
+        async function fetchFunding() {
+            try {
+                const res = await fetch('/api/funding');
+                if (!res.ok) {
+                    console.error('Funding API error:', res.status, res.statusText);
+                    return;
+                }
+                const data = await res.json();
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('Funding data fetched:', data);
+                }
+                setFundingData(data);
+            } catch (e) { 
+                console.error('Funding fetch error:', e); 
+            }
+        }
+        fetchFunding();
+        const fundingTimer = setInterval(fetchFunding, 60000);
+
+        // Snapshot Saving:
+        // Disabled on the client for security (no safe place to keep a write secret in the browser).
+        // Use Supabase Cron / Edge Function (or Vercel Cron) to call /api/snapshot with x-snapshot-secret.
+        const snapshotTimer = null;
+
         return () => {
             clearInterval(timer);
             clearInterval(walletTimer);
+            clearInterval(fundingTimer);
+            if (snapshotTimer) clearInterval(snapshotTimer);
         };
-    }, []);
+    }, []); // Run once on mount
 
     const toggleTheme = () => {
         const newTheme = !isClassicTheme;
@@ -178,12 +307,15 @@ export default function TerminalPage() {
     };
 
     return (
-        <div className={styles.terminalBody} data-theme={isClassicTheme ? 'classic' : 'bloomberg'}>
+        <div className={styles.terminalBody} data-theme={isMounted && isClassicTheme ? 'classic' : 'bloomberg'} suppressHydrationWarning>
             {/* fixed header */}
             <header className={styles.header} style={{ marginBottom: '10px' }}>
                 <div className={styles.brand}>BFX_TERM // v1.0.5</div>
-                <div className={styles.marquee}>{status?.status ? `SYS.MSG: ${status.status.toUpperCase()}` : "SYS.MSG: CONNECTING..."}</div>
+                <div className={styles.marquee} suppressHydrationWarning>{status?.status ? `SYS.MSG: ${status.status.toUpperCase()}` : "SYS.MSG: CONNECTING..."}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? utcTime : "---"}
+                    </div>
                     <button 
                         onClick={toggleTheme}
                         className={styles.themeToggle}
@@ -191,7 +323,12 @@ export default function TerminalPage() {
                     >
                         {isClassicTheme ? '◐' : '◑'}
                     </button>
-                    <div className={styles.clock}>{currentTime}</div>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? localTime : "---"}
+                    </div>
+                    <div className={styles.clock} suppressHydrationWarning>
+                        {isMounted ? currentDate : "---"}
+                    </div>
                 </div>
             </header>
 
@@ -203,34 +340,38 @@ export default function TerminalPage() {
                 rowHeight={100}
                 margin={[4, 4]}
                 containerPadding={[0, 0]}
-                isDraggable={true}
-                isResizable={true}
+                isDraggable={!isMobile}
+                isResizable={!isMobile}
                 draggableHandle=".drag-handle"
                 resizeHandles={['s', 'se']}
             >
-                <div key="vitals" style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                    <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                <div key="vitals" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                     <NetworkVitals status={status} volume={volume} isClassicTheme={isClassicTheme} />
                 </div>
-                <div key="liquidity" style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                    <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                <div key="liquidity" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                     <LiquidityRiskMonitor volume={volume} isClassicTheme={isClassicTheme} />
                 </div>
-                <div key="market" style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                    <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                <div key="market" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                     <MarketScanner volume={volume} movements={movements} isClassicTheme={isClassicTheme} />
                 </div>
-                <div key="wallet" style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                    <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                <div key="wallet" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                     <WalletMonitor walletData={walletData} isClassicTheme={isClassicTheme} />
                 </div>
-                <div key="feed" style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                    <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                <div key="funding" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
+                    <FundingStats funding={fundingData} isClassicTheme={isClassicTheme} />
+                </div>
+                <div key="feed" style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                    <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                     <StatusFeed movements={movements} onTokenClick={addTokenWidget} isClassicTheme={isClassicTheme} />
                 </div>
                 {tokenWidgets.map(widget => (
-                    <div key={widget.id} style={{ border: `1px solid ${isClassicTheme ? '#331a00' : '#30363d'}` }}>
-                        <div className="drag-handle" style={{ height: '8px', background: isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }}></div>
+                    <div key={widget.id} style={{ border: `1px solid ${isMounted && isClassicTheme ? '#331a00' : '#30363d'}` }} suppressHydrationWarning>
+                        <div className="drag-handle" style={{ height: '8px', background: isMounted && isClassicTheme ? '#331a00' : '#30363d', cursor: 'grab', width: '100%', opacity: 0.8 }} suppressHydrationWarning></div>
                         <TokenDetailWidget token={widget.token} onClose={() => removeTokenWidget(widget.id)} isClassicTheme={isClassicTheme} />
                     </div>
                 ))}

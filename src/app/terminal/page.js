@@ -146,7 +146,7 @@ export default function TerminalPage() {
             setUtcTime(now.toLocaleTimeString('en-US', { 
                 hour12: false, 
                 timeZone: 'UTC' 
-            }));
+            }) + ' UTC');
             
             // Local time
             setLocalTime(now.toLocaleTimeString('en-US', { hour12: false }));
@@ -198,7 +198,7 @@ export default function TerminalPage() {
                 const res = await fetch('/api/wallet');
                 if (!res.ok) {
                     console.error('Wallet API error:', res.status, res.statusText);
-                    return;
+                    return; // Don't update state on error - keep previous data
                 }
                 const data = await res.json();
                 if (process.env.NODE_ENV === 'development') {
@@ -209,9 +209,54 @@ export default function TerminalPage() {
                         tokensCount: data.tokens?.length || 0
                     });
                 }
-                setWalletData(data);
+                
+                // Smart merge: preserve previous balances if new ones are invalid
+                setWalletData(prevData => {
+                    if (!prevData || !data.topTokens) {
+                        return data; // First load or no previous data
+                    }
+                    
+                    // Merge: use new data, but preserve valid balances from previous if new ones are missing/invalid
+                    const mergedTopTokens = data.topTokens.map(newToken => {
+                        const prevToken = prevData.topTokens?.find(t => t.symbol === newToken.symbol);
+                        
+                        // If new token has valid balance, use it
+                        if (newToken.currentBalanceUSD !== null && 
+                            newToken.currentBalanceUSD !== undefined && 
+                            newToken.currentBalanceUSD > 0) {
+                            if (process.env.NODE_ENV === 'development' && prevToken && prevToken.currentBalanceUSD !== newToken.currentBalanceUSD) {
+                                console.log(`✅ Updated balance for ${newToken.symbol}: $${prevToken.currentBalanceUSD?.toFixed(2)} → $${newToken.currentBalanceUSD.toFixed(2)}`);
+                            }
+                            return newToken;
+                        }
+                        
+                        // If new token balance is invalid but previous had valid balance, preserve it
+                        if (prevToken && 
+                            prevToken.currentBalanceUSD !== null && 
+                            prevToken.currentBalanceUSD !== undefined && 
+                            prevToken.currentBalanceUSD > 0) {
+                            if (process.env.NODE_ENV === 'development') {
+                                console.log(`⚠️ Preserving previous balance for ${newToken.symbol}: $${prevToken.currentBalanceUSD.toFixed(2)} (new value was invalid)`);
+                            }
+                            return {
+                                ...newToken,
+                                currentBalance: prevToken.currentBalance,
+                                currentBalanceUSD: prevToken.currentBalanceUSD
+                            };
+                        }
+                        
+                        // Otherwise use new token (even if balance is 0/null)
+                        return newToken;
+                    });
+                    
+                    return {
+                        ...data,
+                        topTokens: mergedTopTokens
+                    };
+                });
             } catch (e) { 
-                console.error('Wallet fetch error:', e); 
+                console.error('Wallet fetch error:', e);
+                // Don't update state on error - keep previous data
             }
         }
         fetchWallet();
